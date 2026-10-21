@@ -23,6 +23,16 @@ function shortfallMessage(raw: string) {
   return "Not enough verified questions to follow your blueprint. Prepare the missing questions first.";
 }
 
+export type Readiness = { topic: string; needed: number; available: number; unanswered: number };
+
+/** Per-topic needed/available for a run of `size`, for the Start card. */
+export async function getReadiness(examId: string, size: number): Promise<Readiness[]> {
+  const { supabase } = await getUser();
+  if (!Number.isInteger(size) || size < 1 || size > 200) return [];
+  const { data } = await supabase.rpc("exam_readiness", { p_exam_id: examId, p_size: size });
+  return (data ?? []) as Readiness[];
+}
+
 export async function startSimulation(_prev: FormState, form: FormData): Promise<FormState> {
   const { supabase } = await getUser();
   const size = Number(form.get("size"));
