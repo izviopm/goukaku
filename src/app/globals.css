@@ -1,0 +1,41 @@
+@import "tailwindcss";
+/* Docs contain example class names like bg-[url(...)] that are not real CSS. */
+@source not "../../*.md";
+
+/* Tokens from UI_RULES.md section 4. Tailwind v4 reads them from @theme (no tailwind.config). */
+@theme {
+  --color-primary: #2f5d8c;
+  --color-primary-soft: #dcebf5;
+  --color-accent: #f9b77a;
+  --color-accent-foreground: #7c2d12;
+  --color-accent-soft: #fcd9b6;
+  --color-accent-text: #9a3412;
+  --color-background: #f7fafc;
+  --color-card: #ffffff;
+  --color-foreground: #1e293b;
+  --color-muted: #eef3f8;
+  --color-muted-foreground: #475569;
+  --color-border: #d6e0ea;
+  --color-ring: #2f5d8c;
+  --color-success: #166534;
+  --color-destructive: #b91c1c;
+
+  --font-sans: var(--font-jakarta), var(--font-noto-jp), ui-sans-serif, system-ui, sans-serif;
+}
+
+@keyframes fadein {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    line-height: 1.5;
+  }
+}

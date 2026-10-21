@@ -146,7 +146,8 @@ Nilai kelulusan yang disimpan di simulasi adalah `pass_score_snapshot`.
 profiles            id (auth.users), role ('admin' | 'user'), created_at
 exam_catalog        id, slug unique, display_name, aliases text[], language,
                     pass_score, pass_score_source, pass_score_url
-exams               id, catalog_id, created_by, created_at
+exams               id, catalog_id unique, created_by, created_at
+user_exams          user_id, exam_id, created_at   -- ujian yang tampil di dashboard user
 exam_blueprints     id, exam_id, topic, percentage,
                     source ('web' | 'user' | 'ai'), source_url, confirmed_by
 questions           id, exam_id, type ('mcq' | 'essay'), body, options jsonb,
@@ -168,14 +169,15 @@ simulations         id, user_id, exam_id, size, feedback_mode ('instant' | 'end'
                     started_at, finished_at, score, pass_score_snapshot
 simulation_items    id, simulation_id, position, question_id, snapshot jsonb,
                     user_answer, is_correct, ai_score, ai_feedback, answered_at
-ai_settings         id (singleton), provider, model, api_key_encrypted
-                    -- dienkripsi dengan Supabase Vault
+ai_settings         id (singleton), provider, model, api_key_secret_id
+                    -- id rahasia di Supabase Vault; key terenkripsi di vault.secrets
+                    -- model verifikasi (blind solve) di app_settings.verifier_models
 app_settings        key, value jsonb
 user_limits         user_id, ai_calls_per_day, questions_generated_per_day,
                     unlimited, set_by, set_at, note
 ai_usage            user_id, day, calls, questions_generated, tokens,
                     primary key (user_id, day)
-ai_jobs             id, user_id, exam_id, requested, status, error, created_at
+ai_jobs             id, user_id, exam_id, requested, done, status, error, created_at
 ```
 
 ### RLS
@@ -208,6 +210,7 @@ ai_jobs             id, user_id, exam_id, requested, status, error, created_at
 
 ## 15. Status tooling
 
-- `.gitignore` belum dibuat. Dibuat sebelum kode atau file kunci pertama masuk repo (lihat README).
-- Graphify belum dijalankan karena repo belum berisi kode. Dijalankan setelah scaffold Next.js (lihat README).
+- `.gitignore` sudah dibuat.
+- Scaffold Next.js 16 dan skema Supabase sudah ada (lihat README).
+- Simulasi yang dibiarkan `in_progress` lebih dari 12 jam otomatis menjadi `abandoned` saat user memulai simulasi baru.
 

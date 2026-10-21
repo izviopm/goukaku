@@ -39,15 +39,36 @@ Tidak ada pendaftaran mandiri. Akun dibuat oleh admin.
 
 ## Menjalankan secara lokal
 
-> Belum tersedia. Akan diisi setelah scaffold Next.js dibuat.
+```bash
+npm install
+cp .env.example .env.local   # lalu isi nilainya
+npm run dev                  # http://localhost:3000
+node --test src/lib/rules.test.mjs   # unit test aturan murni
+```
 
 Variabel lingkungan yang dibutuhkan (nilai asli jangan pernah di-commit):
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=   # publishable key (sb_publishable_...)
 SUPABASE_SERVICE_ROLE_KEY=   # hanya server, jangan pernah NEXT_PUBLIC_*
 ```
+
+### Setup pertama
+
+1. Skema ada di `supabase/migrations/` (sudah diterapkan ke proyek Supabase).
+2. Buat akun admin pertama di Supabase Dashboard > Authentication > Add user, lalu jalankan di SQL editor:
+   `update public.profiles set role = 'admin' where id = (select id from auth.users where email = '<email-admin>');`
+3. Login sebagai admin, buka `/admin`: isi provider, model utama, minimal 2 model verifikasi, dan API key (disimpan di Supabase Vault).
+4. Soal baru hanya dipakai simulasi setelah diverifikasi oleh 2 model verifikasi tersebut.
+
+### Struktur
+
+- `src/app/(app)/`: dashboard, `ujian/[slug]`, `simulasi/[id]`, `riwayat`, `admin`
+- `src/app/api/chat`: chat AI dengan aksi terstruktur (bahasa, blueprint, nilai lulus, target, generate soal)
+- `src/lib/ai.ts`: adapter provider (OpenAI, Anthropic, Gemini) dan cek limit
+- `src/lib/questions.ts`, `generate.ts`: dedup, verifikasi blind solve, job generate soal
+- Logika simulasi, penilaian, laporan, dan limit ada di fungsi SQL (`start_simulation`, `answer_item`, `end_simulation`, `report_question`, `consume_ai_quota`)
 
 ## Keamanan
 
@@ -62,7 +83,8 @@ Belum ditentukan.
 
 ## Catatan untuk AI pengerjaan
 
-- **`.gitignore` belum dibuat.** Buat sebelum file apa pun yang berisi kunci masuk ke folder ini. Minimal memuat `node_modules/`, `.next/`, `.env*`, dan `graphify-out/` (kecuali jika tim ingin membagikan graf).
-- **Graphify belum dijalankan.** Jalankan skill `graphify` setelah scaffold Next.js dan kode pertama ada, lalu gunakan `graphify-out/GRAPH_REPORT.md` sebagai peta arsitektur sebelum mengubah struktur file. Jika `graphify-out/graph.json` sudah ada, pertanyaan tentang kode dijawab lewat `graphify query` terlebih dahulu.
+- `.gitignore` sudah ada dan memuat `node_modules/`, `.next/`, `.env*`, dan `graphify-out/`.
+- Next.js di repo ini versi 16: `middleware` sudah bernama `proxy` (`src/proxy.ts`). Baca `node_modules/next/dist/docs/` sebelum memakai API Next.js.
+- Gunakan `graphify-out/GRAPH_REPORT.md` sebagai peta arsitektur sebelum mengubah struktur file. Jika `graphify-out/graph.json` sudah ada, pertanyaan tentang kode dijawab lewat `graphify query` terlebih dahulu.
 - Aturan desain ada di `UI_RULES.md` dan wajib diikuti. Aturan produk ada di `PRD.md` dan menjadi sumber kebenaran jika ada konflik.
 

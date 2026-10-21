@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+build/
+.env*
+!.env.example
+graphify-out/
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+npm-debug.log*
+.DS_Store

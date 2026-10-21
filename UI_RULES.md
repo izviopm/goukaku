@@ -176,8 +176,11 @@ Wajib dipenuhi di setiap halaman:
 
 ## 12. Yang belum diputuskan
 
-- Ikon: Lucide atau Heroicons. Pilih satu dan catat di sini sebelum implementasi.
-- Komponen dasar: shadcn/ui di atas Tailwind, atau komponen buatan sendiri. Jika shadcn dipakai, token di bagian 4 dipetakan ke variabel shadcn.
+Sudah diputuskan (2026-10-21):
+
+- Ikon: **Lucide** (`lucide-react`).
+- Komponen dasar: **buatan sendiri** di `src/components/ui.tsx` (Button, LinkButton, Card, Badge, Field, ErrorText). Tidak memakai shadcn/ui.
+- Tailwind v4 tidak memakai `tailwind.config`; token di bagian 4 didefinisikan di blok `@theme` pada `src/app/globals.css` dan tetap dipakai lewat kelas (`bg-primary`).
 
 ## 13. Log perubahan token
 
