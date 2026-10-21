@@ -27,7 +27,19 @@ export default function LoginPage() {
             </span>
           </div>
           <HowItWorks />
-          <p className="text-sm text-white/85">Accounts are created by an admin.</p>
+          <p className="text-sm text-white/85">
+            © 2026{" "}
+            <a
+              href="https://www.linkedin.com/in/izvio-prijaya-mumin-ba0463149/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-sm underline underline-offset-2 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+            >
+              Izvio Prijaya Mumin
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+            . All rights reserved.
+          </p>
         </Reveal>
       </section>
 

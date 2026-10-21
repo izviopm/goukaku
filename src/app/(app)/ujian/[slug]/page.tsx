@@ -19,7 +19,8 @@ import { getExamBySlug } from "@/lib/exams";
 import { topicStats } from "@/lib/stats";
 import { BlueprintEditor } from "./blueprint-editor";
 import { Chat } from "./chat";
-import { GoalForm, StartSimulationForm, UploadForms } from "./forms";
+import { AddQuestions } from "./add-questions";
+import { GoalForm, StartSimulationForm } from "./forms";
 
 export const maxDuration = 300; // uploads run AI extraction + verification inline
 
@@ -167,7 +168,7 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
 
       <Card>
         <SectionTitle icon={Upload}>Add questions</SectionTitle>
-        <UploadForms examId={exam.examId} />
+        <AddQuestions examId={exam.examId} topics={bp.map((b) => b.topic)} />
       </Card>
     </div>
   );
