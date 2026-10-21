@@ -37,11 +37,12 @@ export async function runJob(jobId: string) {
     // 2. Generate the remainder following the blueprint.
     const remaining = job.requested - reuse.length;
     if (remaining > 0) {
-      const { data: bp } = await db.from("exam_blueprints").select("topic, percentage, confirmed_by").eq("exam_id", job.exam_id);
-      const confirmed = (bp ?? []).filter((b) => b.confirmed_by);
-      if (!confirmed.length) throw new AIError("The exam blueprint is not confirmed yet.");
+      // The user's effective blueprint: their personal one, or the shared default.
+      const { data: bp } = await db.rpc("effective_blueprint_for", { p_user: job.user_id, p_exam_id: job.exam_id });
+      const blueprint = (bp ?? []) as { topic: string; percentage: number }[];
+      if (!blueprint.length) throw new AIError("Set a blueprint for this exam first.");
 
-      for (const topics of chunk(topicPlan(confirmed, remaining))) {
+      for (const topics of chunk(topicPlan(blueprint, remaining))) {
         const { data: existing } = await db
           .from("questions")
           .select("body")

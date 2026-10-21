@@ -4,14 +4,8 @@ import { Runner, type RunnerItem } from "./runner";
 
 type Snapshot = { body: string; options: string[]; answer: string; explanation: string | null; topic: string | null };
 
-export default async function SimulationPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ kurang?: string }>;
-}) {
-  const [{ id }, { kurang }] = await Promise.all([params, searchParams]);
+export default async function SimulationPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const { supabase } = await getUser();
   const { data: sim } = await supabase
     .from("simulations")
@@ -45,7 +39,7 @@ export default async function SimulationPage({
   const name = (sim.exams as unknown as { exam_catalog: { display_name: string } }).exam_catalog.display_name;
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <Runner simId={id} examName={name} mode={sim.feedback_mode as "instant" | "end"} items={items} shortBy={Number(kurang) || 0} />
+      <Runner simId={id} examName={name} mode={sim.feedback_mode as "instant" | "end"} items={items} />
     </div>
   );
 }

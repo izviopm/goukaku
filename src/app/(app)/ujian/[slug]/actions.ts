@@ -12,10 +12,20 @@ import { createAdminClient } from "@/lib/supabase/server";
 export type FormState = { error?: string; field?: string; message?: string };
 
 const SIM_ERRORS: Record<string, string> = {
-  NO_QUESTIONS: "There are no verified questions to use yet. Add questions first, or wait for verification to finish.",
+  NO_BLUEPRINT: "Set a blueprint for this exam first.",
   BAD_SIZE: "Choose between 1 and 200 questions.",
   BAD_MODE: "Choose a feedback mode.",
 };
+
+/** SHORTFALL:[{topic, needed, available}] from start_simulation -> readable per-topic message. */
+function shortfallMessage(raw: string) {
+  try {
+    const rows = JSON.parse(raw.slice(raw.indexOf("[")).trim()) as { topic: string; needed: number; available: number }[];
+    if (rows.length)
+      return `Not enough verified questions to follow your blueprint: ${rows.map((r) => `${r.topic} ${r.available} of ${r.needed}`).join(", ")}. Prepare the missing questions first.`;
+  } catch {}
+  return "Not enough verified questions to follow your blueprint. Prepare the missing questions first.";
+}
 
 export async function startSimulation(_prev: FormState, form: FormData): Promise<FormState> {
   const { supabase } = await getUser();
@@ -26,10 +36,11 @@ export async function startSimulation(_prev: FormState, form: FormData): Promise
 
   const { data, error } = await supabase.rpc("start_simulation", { p_exam_id: String(form.get("examId")), p_size: size, p_mode: mode });
   if (error) {
+    if (error.message.includes("SHORTFALL")) return { error: shortfallMessage(error.message), field: "size" };
     const code = Object.keys(SIM_ERRORS).find((k) => error.message.includes(k));
     return { error: code ? SIM_ERRORS[code] : error.message, field: "size" };
   }
-  redirect(`/simulasi/${data.id}${data.size < data.requested ? `?kurang=${data.requested - data.size}` : ""}`);
+  redirect(`/simulasi/${data.id}`);
 }
 
 /** Path A: questions with answers, from a CSV/JSON file or the manual form. */

@@ -19,7 +19,7 @@ export type RunnerItem = {
   feedback?: Feedback;
 };
 
-export function Runner({ simId, examName, mode, items: initial, shortBy }: { simId: string; examName: string; mode: "instant" | "end"; items: RunnerItem[]; shortBy: number }) {
+export function Runner({ simId, examName, mode, items: initial }: { simId: string; examName: string; mode: "instant" | "end"; items: RunnerItem[] }) {
   const [items, setItems] = useState(initial);
   const [i, setI] = useState(() => Math.max(0, initial.findIndex((x) => !x.userAnswer)));
   const [dir, setDir] = useState(1);
@@ -70,12 +70,6 @@ export function Runner({ simId, examName, mode, items: initial, shortBy }: { sim
         </div>
         <ProgressBar value={(100 * answered) / items.length} />
       </div>
-
-      {shortBy > 0 && (
-        <p className="rounded-xl bg-accent-soft px-4 py-3 text-sm text-accent-foreground">
-          {shortBy} verified questions short, so this run uses {items.length}. Ask the AI assistant on the exam page for more questions.
-        </p>
-      )}
 
       <AnimatePresence mode="wait" initial={false} custom={dir}>
         <motion.div
