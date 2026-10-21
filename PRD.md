@@ -30,6 +30,7 @@ Membantu user belajar untuk ujian sertifikasi lewat simulasi yang menyerupai uji
 - Semua user bisa chat. Panggilan AI dijalankan di server memakai API key admin.
 - User tidak pernah melihat atau memasukkan API key.
 - Setiap panggilan dihitung ke `ai_usage` dan dicek terhadap limit (lihat bagian 9).
+- Fallback model: jika model utama gagal (down, timeout, rate limit, model tidak ditemukan), model lain di daftar admin dicoba sesuai urutan. Error API key (401/403) dan limit tidak memicu fallback karena semua model memakai key yang sama.
 - Bahasa soal ditentukan per ujian (`exam_catalog.language`). Jika ujian bersifat campuran dan belum ditentukan, AI bertanya ke user lalu menyimpan jawabannya. Ujian yang secara umum berbahasa Inggris (misalnya TOEFL) langsung dibuat dalam bahasa Inggris.
 - AI boleh memberi saran topik atau tips ujian yang ditemukan di internet, selama disertai sumber.
 
@@ -60,7 +61,7 @@ Tiga jalur:
 Soal baru tidak dipakai simulasi sampai `answer_status = verified`.
 
 1. **Cek struktur**: jumlah opsi sesuai, tepat satu kunci untuk MCQ, kunci ada di opsi.
-2. **Blind solve**: minimal dua model berbeda menjawab tanpa melihat kunci. Penjelasan juga dibandingkan.
+2. **Blind solve**: minimal dua dan maksimal tiga model berbeda menjawab tanpa melihat kunci (hemat token). Model verifikasi diambil sesuai urutan daftar admin; model berikutnya hanya dipakai sebagai cadangan jika ada yang gagal. Jika kurang dari dua model bisa dihubungi, soal tetap `unverified` dan dicek ulang nanti. Penjelasan juga disimpan.
 3. **Sumber web** (opsional): jika ada sumber resmi yang bertentangan, status `disputed`.
 4. Semua sepakat → `verified`. Ada yang tidak sepakat → `disputed`, tidak dipakai simulasi.
 

@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { complete, consumeQuota, extractJson, getVerifierModels } from "@/lib/ai";
+import { complete, consumeQuota, extractJson, getVerifierModels, isFatal } from "@/lib/ai";
+import { MAX_VERIFIERS, upToN } from "@/lib/fallback";
 import { chunk, LETTERS, normalize, structureError, type QuestionInput } from "@/lib/rules";
 import { createAdminClient } from "@/lib/supabase/server";
 
@@ -82,8 +83,9 @@ export async function solve(userId: string, qs: QuestionInput[], model?: string)
 }
 
 /**
- * PRD 5 answer-key check: structure, then a blind solve by at least two different models.
+ * PRD 5 answer-key check: structure, then a blind solve by 2 to MAX_VERIFIERS different models.
  * All agree with the key -> verified; any disagreement or structure failure -> disputed.
+ * Fewer than 2 models reachable -> stays unverified so a later check can retry.
  */
 export async function verifyQuestions(userId: string, ids: string[]) {
   if (!ids.length) return;
@@ -111,15 +113,24 @@ export async function verifyQuestions(userId: string, ids: string[]) {
   }
 
   for (const batch of chunk(valid)) {
-    const results = await Promise.all(models.map((m) => solve(userId, batch, m)));
+    const { ok, failed } = await upToN(models, MAX_VERIFIERS, (m) => solve(userId, batch, m), isFatal);
+    if (failed.length) console.warn("Verifier fallback:", failed);
     for (const [i, q] of batch.entries()) {
-      const solvers = models.map((model, k) => ({ model, ...results[k][i] }));
-      const agree = solvers.every((s) => s.answer === q.answer);
+      const solvers = ok.map(({ model, value }) => ({ model, ...value[i] }));
+      const enough = solvers.length >= 2;
+      const agree = enough && solvers.every((s) => s.answer === q.answer);
       await db
         .from("questions")
         .update({
-          answer_status: agree ? "verified" : "disputed",
-          verification: { checked_at: now, structure: "ok", key: q.answer, solvers },
+          answer_status: !enough ? "unverified" : agree ? "verified" : "disputed",
+          verification: {
+            checked_at: now,
+            structure: "ok",
+            key: q.answer,
+            solvers,
+            ...(failed.length && { unavailable: failed }),
+            ...(!enough && { note: "Fewer than 2 verifier models were reachable" }),
+          },
         })
         .eq("id", q.id);
     }

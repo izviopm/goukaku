@@ -67,7 +67,8 @@ export async function saveAiSettings(_p: AdminState, form: FormData): Promise<Ad
   }
   const { error: e2 } = await supabase.from("app_settings").upsert([
     { key: "ai_models", value: { models: settings.models } },
-    { key: "verifier_models", value: { models: settings.verifiers } },
+    // List order is priority order: the first verifiers are used, later ones are backups.
+    { key: "verifier_models", value: { models: settings.models.map((m) => m.id).filter((id) => settings.verifiers.includes(id)) } },
   ]);
   if (e2) return { error: e2.message };
   return done(key ? "AI settings and API key saved" : "AI settings saved");

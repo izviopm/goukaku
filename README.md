@@ -43,7 +43,7 @@ Tidak ada pendaftaran mandiri. Akun dibuat oleh admin.
 npm install
 cp .env.example .env.local   # lalu isi nilainya
 npm run dev                  # http://localhost:3000
-node --test src/lib/rules.test.mjs   # unit test aturan murni
+node --test src/lib/*.test.mjs      # unit test aturan murni dan fallback model
 ```
 
 Variabel lingkungan yang dibutuhkan (nilai asli jangan pernah di-commit):

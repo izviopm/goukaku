@@ -1,4 +1,5 @@
 import "server-only";
+import { AllFailedError, firstSuccess } from "@/lib/fallback";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export type Provider = "openai" | "anthropic" | "gemini" | "openai_compatible";
@@ -14,8 +15,24 @@ const LIMIT_MESSAGES: Record<string, string> = {
 };
 
 export class AIError extends Error {}
+/** Limit or kill switch hit: trying another model would not help. */
+export class QuotaError extends AIError {}
+/** HTTP error from the provider, with its status. */
+export class ProviderError extends AIError {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
 
-/** Checks limits and records usage before any AI call (PRD 9). Throws AIError with a user-facing message. */
+// Every model shares one key, so a key/permission error or a quota stop fails them all. Anything else
+// (outage, timeout, rate limit, unknown model, bad JSON) is worth retrying on the next model.
+export const isFatal = (e: unknown) => e instanceof QuotaError || (e instanceof ProviderError && (e.status === 401 || e.status === 403));
+
+const TIMEOUT_MS = 120_000;
+
+/** Checks limits and records usage before any AI call (PRD 9). Throws QuotaError with a user-facing message. */
 export async function consumeQuota(userId: string, calls: number, questions = 0) {
   const { error } = await createAdminClient().rpc("consume_ai_quota", {
     p_user_id: userId,
@@ -24,20 +41,24 @@ export async function consumeQuota(userId: string, calls: number, questions = 0)
   });
   if (error) {
     const code = Object.keys(LIMIT_MESSAGES).find((k) => error.message.includes(k));
-    throw new AIError(code ? LIMIT_MESSAGES[code] : `Could not check the AI limit: ${error.message}`);
+    throw new QuotaError(code ? LIMIT_MESSAGES[code] : `Could not check the AI limit: ${error.message}`);
   }
 }
 
-async function getConfig() {
+type Config = { provider: Provider; model: string; models: string[]; baseUrl: string; apiKey: string };
+
+async function getConfig(): Promise<Config> {
   const db = createAdminClient();
-  const [{ data: settings }, { data: key }] = await Promise.all([
+  const [{ data: settings }, { data: key }, { data: list }] = await Promise.all([
     db.from("ai_settings").select("provider, model, base_url").eq("id", true).maybeSingle(),
     db.rpc("get_ai_api_key"),
+    db.from("app_settings").select("value").eq("key", "ai_models").maybeSingle(),
   ]);
   if (!settings || !key) throw new AIError("AI is not set up yet. Ask the admin to set the provider, model, and API key.");
   return {
     provider: settings.provider as Provider,
     model: settings.model as string,
+    models: ((list?.value?.models as AiModel[]) ?? []).map((m) => m.id),
     baseUrl: (settings.base_url as string | null) ?? "",
     apiKey: key as string,
   };
@@ -54,15 +75,38 @@ export async function getVerifierModels(): Promise<string[]> {
   return (data?.value?.models as string[]) ?? [];
 }
 
-/** One completion with the admin's provider and key. Caller must call consumeQuota first. */
-export async function complete({ system, messages, model, webSearch }: CallOptions): Promise<string> {
+/**
+ * One completion with the admin's provider and key. Caller must call consumeQuota first.
+ * Without an explicit `model`, the main model is tried first and the rest of the admin's list (in order)
+ * takes over if it is down.
+ */
+export async function complete(opts: CallOptions): Promise<string> {
   const cfg = await getConfig();
-  const m = model || cfg.model;
+  const order = opts.model ? [opts.model] : [cfg.model, ...cfg.models.filter((m) => m !== cfg.model)];
+  try {
+    const { model, value, failed } = await firstSuccess(order, (m) => callModel(cfg, m, opts), isFatal);
+    if (failed.length) console.warn(`AI fallback: answered by ${model} after`, failed);
+    return value;
+  } catch (e) {
+    if (!(e instanceof AllFailedError)) throw e;
+    throw new AIError(order.length > 1 ? `All AI models are unavailable right now (${e.message}).` : e.message);
+  }
+}
+
+async function callModel(cfg: Config, m: string, { system, messages, webSearch }: CallOptions): Promise<string> {
+  const text = await request(cfg, m, system, messages, webSearch);
+  if (!text.trim()) throw new AIError("Empty reply");
+  return text;
+}
+
+async function request(cfg: Config, m: string, system: string, messages: ChatMessage[], webSearch?: boolean): Promise<string> {
   let res: Response;
+  const signal = AbortSignal.timeout(TIMEOUT_MS);
 
   if (cfg.provider === "anthropic") {
     res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
+      signal,
       headers: { "x-api-key": cfg.apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model: m,
@@ -79,6 +123,7 @@ export async function complete({ system, messages, model, webSearch }: CallOptio
   if (cfg.provider === "openai_compatible") {
     res = await fetch(`${cfg.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
+      signal,
       headers: { authorization: `Bearer ${cfg.apiKey}`, "content-type": "application/json" },
       body: JSON.stringify({ model: m, messages: [{ role: "system", content: system }, ...messages] }),
     });
@@ -89,6 +134,7 @@ export async function complete({ system, messages, model, webSearch }: CallOptio
   if (cfg.provider === "openai") {
     res = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
+      signal,
       headers: { authorization: `Bearer ${cfg.apiKey}`, "content-type": "application/json" },
       body: JSON.stringify({
         model: m,
@@ -108,6 +154,7 @@ export async function complete({ system, messages, model, webSearch }: CallOptio
 
   res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, {
     method: "POST",
+    signal,
     headers: { "x-goog-api-key": cfg.apiKey, "content-type": "application/json" },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
@@ -121,7 +168,7 @@ export async function complete({ system, messages, model, webSearch }: CallOptio
 
 async function readJson(res: Response) {
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new AIError(`The AI provider rejected the request (${res.status}): ${json?.error?.message ?? "no details"}`);
+  if (!res.ok) throw new ProviderError(res.status, `The AI provider rejected the request (${res.status}): ${json?.error?.message ?? "no details"}`);
   return json;
 }
 

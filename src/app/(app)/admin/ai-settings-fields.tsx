@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { Button, Field, inputClass } from "@/components/ui";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { Badge, Button, Field, inputClass } from "@/components/ui";
+import { MAX_VERIFIERS } from "@/lib/fallback";
 
 type Row = { key: number; id: string; name: string };
 type Props = {
@@ -45,6 +46,14 @@ export function AiSettingsFields(props: Props) {
     }
   };
   const toggle = (id: string) => setVerifiers((v) => (v.includes(id) ? v.filter((x) => x !== id) : [...v, id]));
+  const move = (index: number, by: -1 | 1) =>
+    setRows((rs) => {
+      const next = [...rs];
+      [next[index], next[index + by]] = [next[index + by], next[index]];
+      return next;
+    });
+  // Same ordering the server stores: list order decides which verifiers are used and which are backups.
+  const checkedInOrder = valid.map((r) => r.id.trim()).filter((id) => verifiers.includes(id));
 
   return (
     <>
@@ -70,6 +79,7 @@ export function AiSettingsFields(props: Props) {
 
       <fieldset className="flex flex-col gap-3">
         <legend className="mb-1 text-sm font-medium">Models</legend>
+        <p className="-mt-1 text-sm text-muted-foreground">Order is priority. If a model is down, the next one in this list takes over.</p>
         <input type="hidden" name="models" value={JSON.stringify(valid.map(({ id, name }) => ({ id: id.trim(), name: name.trim() })))} />
         {rows.map((r, i) => (
           <div key={r.key} className="grid grid-cols-[1fr_auto] items-end gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_1fr_auto]">
@@ -95,19 +105,27 @@ export function AiSettingsFields(props: Props) {
                 />
               </Field>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              className="col-start-2 row-start-1 sm:col-start-auto sm:row-start-auto"
-              aria-label={`Remove model ${r.name || r.id || i + 1}`}
-              disabled={rows.length === 1}
-              onClick={() => {
-                setRows((rs) => rs.filter((x) => x.key !== r.key));
-                setVerifiers((v) => v.filter((x) => x !== r.id.trim()));
-              }}
-            >
-              <Trash2 aria-hidden="true" className="size-4" />
-            </Button>
+            <div className="col-start-2 row-start-1 flex sm:col-start-auto sm:row-start-auto">
+              <Button type="button" variant="ghost" className="px-2" aria-label={`Move ${r.name || r.id || i + 1} up`} disabled={i === 0} onClick={() => move(i, -1)}>
+                <ArrowUp aria-hidden="true" className="size-4" />
+              </Button>
+              <Button type="button" variant="ghost" className="px-2" aria-label={`Move ${r.name || r.id || i + 1} down`} disabled={i === rows.length - 1} onClick={() => move(i, 1)}>
+                <ArrowDown aria-hidden="true" className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="px-2"
+                aria-label={`Remove model ${r.name || r.id || i + 1}`}
+                disabled={rows.length === 1}
+                onClick={() => {
+                  setRows((rs) => rs.filter((x) => x.key !== r.key));
+                  setVerifiers((v) => v.filter((x) => x !== r.id.trim()));
+                }}
+              >
+                <Trash2 aria-hidden="true" className="size-4" />
+              </Button>
+            </div>
           </div>
         ))}
         <Button type="button" variant="outline" className="self-start" onClick={() => setRows((rs) => [...rs, { key: nextKey.current++, id: "", name: "" }])}>
@@ -116,7 +134,11 @@ export function AiSettingsFields(props: Props) {
         </Button>
       </fieldset>
 
-      <Field id="main" label="Main model" help="Used for chat, generating questions, and answering questions from PDFs.">
+      <Field
+        id="main"
+        label="Main model"
+        help="Used for chat, generating questions, and answering questions from PDFs. If it is down, the other models are tried in list order."
+      >
         <select id="main" name="main" value={main} onChange={(e) => setMain(e.target.value)} className={inputClass} aria-describedby="main-help">
           <option value="">Choose a model…</option>
           {valid.map((r) => (
@@ -129,14 +151,22 @@ export function AiSettingsFields(props: Props) {
 
       <fieldset className="flex flex-col gap-2">
         <legend className="text-sm font-medium">Verifier models</legend>
-        <p className="text-sm text-muted-foreground">Pick at least 2 different models. They answer each question without seeing the key, to check the answer key.</p>
+        <p className="text-sm text-muted-foreground">
+          Pick at least 2. They answer each question without seeing the key. To save tokens, only the first {MAX_VERIFIERS} checked (in list order) are
+          used; the rest are backups for when one is down.
+        </p>
         {valid.length === 0 && <p className="text-sm text-muted-foreground">Add a model first.</p>}
-        {valid.map((r) => (
-          <label key={r.key} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 has-[:checked]:border-primary has-[:checked]:bg-primary-soft">
-            <input type="checkbox" name="verifiers" value={r.id.trim()} checked={verifiers.includes(r.id.trim())} onChange={() => toggle(r.id.trim())} className="size-4 accent-primary" />
-            <span>{label(r)}</span>
-          </label>
-        ))}
+        {valid.map((r) => {
+          const id = r.id.trim();
+          const rank = checkedInOrder.indexOf(id);
+          return (
+            <label key={r.key} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 has-[:checked]:border-primary has-[:checked]:bg-primary-soft">
+              <input type="checkbox" name="verifiers" value={id} checked={rank >= 0} onChange={() => toggle(id)} className="size-4 accent-primary" />
+              <span className="flex-1">{label(r)}</span>
+              {rank >= 0 && <Badge tone={rank < MAX_VERIFIERS ? "primary" : "accent"}>{rank < MAX_VERIFIERS ? "Used" : "Backup"}</Badge>}
+            </label>
+          );
+        })}
       </fieldset>
     </>
   );
