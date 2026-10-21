@@ -12,18 +12,18 @@ import {
   TriangleAlert,
   Upload,
 } from "lucide-react";
-import { Badge, Button, Card, EmptyState, Hero, LinkButton, ProgressBar, SectionTitle, StatTile } from "@/components/ui";
+import { Badge, Card, EmptyState, Hero, LinkButton, ProgressBar, SectionTitle, StatTile } from "@/components/ui";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion";
 import { getUser } from "@/lib/auth";
 import { getExamBySlug } from "@/lib/exams";
 import { topicStats } from "@/lib/stats";
-import { confirmBlueprint } from "./actions";
+import { BlueprintEditor } from "./blueprint-editor";
 import { Chat } from "./chat";
 import { GoalForm, StartSimulationForm, UploadForms } from "./forms";
 
 export const maxDuration = 300; // uploads run AI extraction + verification inline
 
-const SOURCE = { web: "web", user: "you", ai: "AI" } as Record<string, string>;
+const SOURCE = { web: "web", user: "you" } as Record<string, string>;
 
 export default async function ExamPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -31,10 +31,12 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
   if (!exam) notFound();
   const { supabase, id: userId } = await getUser();
 
-  const [{ data: pool }, { data: blueprint }, { data: goal }, { data: items }] = await Promise.all([
+  const [{ data: pool }, { data: blueprint }, { data: defaults }, { data: topicRows }, { data: goal }, { data: items }] = await Promise.all([
     supabase.from("user_exam_pool").select("questions(answer_status, status)").eq("exam_id", exam.examId).eq("user_id", userId),
-    supabase.from("exam_blueprints").select("id, topic, percentage, source, source_url, confirmed_by").eq("exam_id", exam.examId).order("percentage", { ascending: false }),
-    supabase.from("user_exam_goal").select("target_score").eq("exam_id", exam.examId).eq("user_id", userId).maybeSingle(),
+    supabase.rpc("effective_blueprint", { p_exam_id: exam.examId }),
+    supabase.from("exam_blueprints").select("topic, source_url").eq("exam_id", exam.examId).not("confirmed_by", "is", null),
+    supabase.from("questions").select("topic").eq("exam_id", exam.examId).not("topic", "is", null).limit(1000),
+    supabase.from("user_exam_goal").select("target_score, exam_size").eq("exam_id", exam.examId).eq("user_id", userId).maybeSingle(),
     supabase
       .from("simulation_items")
       .select("is_correct, snapshot, simulations!inner(exam_id, status)")
@@ -49,7 +51,9 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
   const disputed = qs.filter((q) => q.answer_status === "disputed" || q.status === "hidden").length;
   const stats = topicStats(items ?? []);
   const weak = stats.filter((s) => s.total >= 3 && s.pct < 60);
-  const unconfirmed = (blueprint ?? []).some((b) => !b.confirmed_by);
+  const bp = ((blueprint ?? []) as { topic: string; percentage: number; personal: boolean }[]).sort((a, b) => b.percentage - a.percentage);
+  const personal = bp.some((b) => b.personal);
+  const topicSuggestions = [...new Set([...(defaults ?? []).map((d) => d.topic), ...(topicRows ?? []).map((t) => t.topic as string)])].sort();
   const passScore = goal?.target_score ?? exam.pass_score;
 
   return (
@@ -139,51 +143,25 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <SectionTitle icon={ListTree} aside={unconfirmed && <Badge tone="accent">Not confirmed</Badge>}>
-            Blueprint
-          </SectionTitle>
-          {!blueprint?.length ? (
-            <EmptyState icon={ListTree} title="No blueprint yet">
-              Ask the AI assistant to find one or to help you put it together.
-            </EmptyState>
-          ) : (
-            <>
-              <ul className="flex flex-col gap-3 text-sm">
-                {blueprint.map((b) => (
-                  <li key={b.id} className="flex flex-col gap-1">
-                    <div className="flex justify-between gap-4">
-                      <span>{b.topic}</span>
-                      <span className="font-semibold tabular-nums">{b.percentage}%</span>
-                    </div>
-                    <ProgressBar value={Number(b.percentage)} />
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-4 text-sm text-muted-foreground">
-                Source: {SOURCE[blueprint[0].source]}
-                {blueprint[0].source_url && (
-                  <>
-                    {" · "}
-                    <a href={blueprint[0].source_url} target="_blank" rel="noreferrer" className="text-primary underline">
-                      link
-                    </a>
-                  </>
-                )}
-              </p>
-              {unconfirmed && (
-                <form action={confirmBlueprint} className="mt-4">
-                  <input type="hidden" name="examId" value={exam.examId} />
-                  <Button type="submit" variant="accent">
-                    Confirm blueprint
-                  </Button>
-                </form>
-              )}
-            </>
-          )}
+          <SectionTitle icon={Target}>Goal</SectionTitle>
+          <GoalForm
+            examId={exam.examId}
+            language={exam.language}
+            target={goal?.target_score ?? null}
+            examSize={goal?.exam_size ?? null}
+            officialPass={exam.pass_score}
+          />
         </Card>
         <Card>
-          <SectionTitle icon={Target}>Personal target</SectionTitle>
-          <GoalForm examId={exam.examId} current={goal?.target_score ?? null} />
+          <SectionTitle icon={ListTree}>Blueprint</SectionTitle>
+          <BlueprintEditor
+            examId={exam.examId}
+            initial={bp.map(({ topic, percentage }) => ({ topic, percentage: Number(percentage) }))}
+            personal={personal}
+            hasDefault={(defaults ?? []).length > 0}
+            sourceUrl={(defaults ?? []).find((d) => d.source_url)?.source_url ?? null}
+            topicSuggestions={topicSuggestions}
+          />
         </Card>
       </div>
 

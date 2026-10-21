@@ -3,6 +3,8 @@ import { z } from "zod";
 import { AIError, complete, consumeQuota, webSearchAvailable, type ChatMessage } from "@/lib/ai";
 import { getUser } from "@/lib/auth";
 import { runJob } from "@/lib/generate";
+import { normalizeBlueprint } from "@/lib/rules";
+import { saveBlueprint } from "@/app/(app)/ujian/[slug]/blueprint-actions";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export const maxDuration = 300;
@@ -61,22 +63,19 @@ export async function POST(req: Request) {
       }
       const a = action.data;
       if (a.type === "set_language") {
-        await db.from("exam_catalog").update({ language: a.language }).eq("id", exam.catalog_id);
+        // Shared per exam: only set when nobody has chosen it yet (the admin can change it later).
+        await db.from("exam_catalog").update({ language: a.language }).eq("id", exam.catalog_id).is("language", null);
         notes.push(`Question language saved: ${a.language === "en" ? "English" : "Indonesian"}.`);
       } else if (a.type === "set_blueprint") {
-        // Web blueprints stay inactive until someone confirms them (PRD 6).
-        await db.from("exam_blueprints").delete().eq("exam_id", examId);
-        await db.from("exam_blueprints").insert(
-          a.topics.map((t) => ({
-            exam_id: examId,
-            topic: t.topic,
-            percentage: t.percentage,
-            source: a.source,
-            source_url: a.source_url ?? null,
-            confirmed_by: a.source === "web" ? null : user.id,
-          })),
+        // Same hybrid rule as the Blueprint panel: default if none exists yet, otherwise personal.
+        const res = await saveBlueprint(examId, normalizeBlueprint(a.topics), a.source, a.source_url ?? null);
+        notes.push(
+          res.error
+            ? `Blueprint not saved: ${res.error}`
+            : res.scope === "default"
+              ? "Blueprint saved as the default for this exam."
+              : "Blueprint saved as your personal blueprint.",
         );
-        notes.push(a.source === "web" ? "Blueprint from the web saved. Confirm it in the Blueprint panel first." : "Blueprint saved.");
       } else if (a.type === "set_pass_score") {
         await db
           .from("exam_catalog")

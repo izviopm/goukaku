@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { createUser, saveAiSettings, saveCatalog, saveLimits, saveUserLimit } from "./actions";
 import { AiSettingsFields } from "./ai-settings-fields";
+import { BlueprintEditor } from "../ujian/[slug]/blueprint-editor";
 
 export default async function AdminPage() {
   const { supabase } = await requireAdmin();
@@ -19,7 +20,7 @@ export default async function AdminPage() {
       supabase.from("user_limits").select("*"),
       supabase.from("ai_usage").select("user_id, calls, questions_generated").eq("day", today),
       supabase.from("question_reports").select("id, reason, created_at, question_id, questions(body, status)").order("created_at", { ascending: false }).limit(100),
-      supabase.from("exam_catalog").select("*").order("display_name"),
+      supabase.from("exam_catalog").select("*, exams(id, exam_blueprints(topic, percentage, source_url, confirmed_by))").order("display_name"),
       createAdminClient().auth.admin.listUsers({ perPage: 1000 }),
     ]);
 
@@ -158,8 +159,14 @@ export default async function AdminPage() {
             <EmptyState icon={BookMarked} title="No exams yet" />
           ) : (
             <ul className="flex flex-col divide-y">
-              {catalog.map((c) => (
-                <li key={c.id} className="py-4">
+              {catalog.map((c) => {
+                const examRow = c.exams as unknown as {
+                  id: string;
+                  exam_blueprints: { topic: string; percentage: number; source_url: string | null; confirmed_by: string | null }[];
+                } | null;
+                const defaultBp = (examRow?.exam_blueprints ?? []).filter((b) => b.confirmed_by);
+                return (
+                <li key={c.id} className="flex flex-col gap-3 py-4">
                   <ActionForm action={saveCatalog} submit="Save" className="grid items-end gap-3 md:grid-cols-5">
                     <input type="hidden" name="id" value={c.id} />
                     <input type="hidden" name="slug" value={c.slug} />
@@ -181,8 +188,23 @@ export default async function AdminPage() {
                       <input id={`ps-${c.id}`} name="pass_score" type="number" min={0} max={100} step="0.1" defaultValue={c.pass_score ?? ""} className={inputClass} />
                     </Field>
                   </ActionForm>
+                  {examRow && (
+                    <details className="rounded-lg border p-4">
+                      <summary className="cursor-pointer font-medium">
+                        Default blueprint {defaultBp.length ? `(${defaultBp.length} topics)` : "(not set)"}
+                      </summary>
+                      <p className="mt-2 mb-4 text-sm text-muted-foreground">Used by everyone studying this exam who has no personal blueprint.</p>
+                      <BlueprintEditor
+                        examId={examRow.id}
+                        mode="admin"
+                        initial={defaultBp.map((b) => ({ topic: b.topic, percentage: Number(b.percentage) }))}
+                        sourceUrl={defaultBp.find((b) => b.source_url)?.source_url ?? null}
+                      />
+                    </details>
+                  )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </Card>

@@ -1,6 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { structureError, topicPlan, questionsFromCsv, modelSettingsError } from "./rules.ts";
+import { structureError, topicPlan, questionsFromCsv, modelSettingsError, blueprintError, normalizeBlueprint } from "./rules.ts";
+
+test("blueprintError", () => {
+  assert.equal(blueprintError([{ topic: "A", percentage: 60 }, { topic: "B", percentage: 40 }]), null);
+  assert.match(blueprintError([]), /at least one/);
+  assert.match(blueprintError([{ topic: "A", percentage: 60 }, { topic: " a ", percentage: 40 }]), /same name/);
+  assert.match(blueprintError([{ topic: "A", percentage: 60 }, { topic: "B", percentage: 30 }]), /add up to 100 \(now 90\)/);
+  assert.match(blueprintError([{ topic: "", percentage: 100 }]), /empty/);
+});
+
+test("normalizeBlueprint scales to whole numbers summing to 100", () => {
+  const out = normalizeBlueprint([{ topic: "A", percentage: 1 }, { topic: "B", percentage: 1 }, { topic: "C", percentage: 1 }]);
+  assert.equal(out.reduce((s, r) => s + r.percentage, 0), 100);
+  assert.deepEqual(out.map((r) => r.percentage).sort(), [33, 33, 34]);
+  assert.deepEqual(normalizeBlueprint([{ topic: " X ", percentage: 30 }, { topic: "", percentage: 70 }]), [{ topic: "X", percentage: 100 }]);
+});
 
 test("modelSettingsError", () => {
   const models = [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "" }];

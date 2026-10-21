@@ -54,6 +54,36 @@ export function modelSettingsError({ models, main, verifiers }: ModelSettings): 
   return null;
 }
 
+export type BlueprintRow = { topic: string; percentage: number };
+
+/** Blueprint form: unique non-empty topics (case-insensitive), positive percentages that add up to 100. */
+export function blueprintError(rows: BlueprintRow[]): string | null {
+  if (!rows.length) return "Add at least one topic";
+  if (rows.length > 40) return "Use at most 40 topics";
+  if (rows.some((r) => !r.topic.trim())) return "A topic name is empty";
+  const keys = rows.map((r) => normalize(r.topic));
+  if (new Set(keys).size !== keys.length) return "Two topics have the same name";
+  if (rows.some((r) => !(r.percentage > 0) || r.percentage > 100)) return "Each topic needs a percentage between 0 and 100";
+  const total = rows.reduce((s, r) => s + r.percentage, 0);
+  if (Math.abs(total - 100) > 0.01) return `Percentages must add up to 100 (now ${Math.round(total * 100) / 100})`;
+  return null;
+}
+
+/** Scales AI-suggested percentages to whole numbers that add up to exactly 100. */
+export function normalizeBlueprint(rows: BlueprintRow[]): BlueprintRow[] {
+  const clean = rows.filter((r) => r.topic?.trim() && r.percentage > 0).map((r) => ({ topic: r.topic.trim(), percentage: Number(r.percentage) }));
+  const total = clean.reduce((s, r) => s + r.percentage, 0);
+  if (!clean.length || !total) return [];
+  const exact = clean.map((r) => (r.percentage / total) * 100);
+  const out = exact.map((e, i) => ({ topic: clean[i].topic, percentage: Math.floor(e) }));
+  let left = 100 - out.reduce((s, r) => s + r.percentage, 0);
+  for (const i of exact.map((e, i) => i).sort((a, b) => exact[b] - Math.floor(exact[b]) - (exact[a] - Math.floor(exact[a])))) {
+    if (left-- <= 0) break;
+    out[i].percentage++;
+  }
+  return out.filter((r) => r.percentage > 0);
+}
+
 /** RFC 4180-style CSV: quoted fields, escaped quotes, commas and newlines inside quotes. */
 export function parseCsv(text: string): string[][] {
   const rows: string[][] = [];

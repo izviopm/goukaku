@@ -144,29 +144,28 @@ async function finish(userId: string, examId: string, items: QuestionInput[], or
   }
 }
 
-export async function confirmBlueprint(form: FormData) {
-  const user = await getUser();
-  await createAdminClient()
-    .from("exam_blueprints")
-    .update({ confirmed_by: user.id })
-    .eq("exam_id", String(form.get("examId")))
-    .is("confirmed_by", null);
-  revalidatePath("/ujian/[slug]", "page");
-}
-
+/** Setup step 1: question language (shared, set once), optional personal target, and real exam size. */
 export async function saveGoal(_prev: FormState, form: FormData): Promise<FormState> {
   const { supabase, id } = await getUser();
-  const raw = String(form.get("target") ?? "").trim();
   const examId = String(form.get("examId"));
-  if (raw === "") {
-    await supabase.from("user_exam_goal").delete().eq("user_id", id).eq("exam_id", examId);
-    revalidatePath("/ujian/[slug]", "page");
-    return { message: "Target removed" };
+  const language = String(form.get("language") ?? "");
+  const rawTarget = String(form.get("target") ?? "").trim();
+  const rawSize = String(form.get("examSize") ?? "").trim();
+  const target = rawTarget === "" ? null : Number(rawTarget);
+  const examSize = rawSize === "" ? null : Number(rawSize);
+
+  if (form.has("language") && language !== "en" && language !== "id") return { error: "Choose the question language", field: "language" };
+  if (target !== null && !(Number.isFinite(target) && target >= 0 && target <= 100)) return { error: "Target must be between 0 and 100", field: "target" };
+  if (examSize !== null && !(Number.isInteger(examSize) && examSize >= 1 && examSize <= 500)) return { error: "Enter a whole number between 1 and 500", field: "examSize" };
+
+  if (form.has("language")) {
+    // Shared per exam: only the first learner sets it; the admin can change it later.
+    const db = createAdminClient();
+    const { data: exam } = await db.from("exams").select("catalog_id").eq("id", examId).single();
+    if (exam) await db.from("exam_catalog").update({ language }).eq("id", exam.catalog_id).is("language", null);
   }
-  const target = Number(raw);
-  if (!Number.isFinite(target) || target < 0 || target > 100) return { error: "Target must be between 0 and 100", field: "target" };
-  const { error } = await supabase.from("user_exam_goal").upsert({ user_id: id, exam_id: examId, target_score: target });
+  const { error } = await supabase.from("user_exam_goal").upsert({ user_id: id, exam_id: examId, target_score: target, exam_size: examSize });
   if (error) return { error: error.message, field: "target" };
   revalidatePath("/ujian/[slug]", "page");
-  return { message: "Target saved" };
+  return { message: "Saved" };
 }

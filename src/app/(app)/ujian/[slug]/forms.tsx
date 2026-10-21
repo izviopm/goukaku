@@ -65,17 +65,57 @@ export function StartSimulationForm({ examId, ready }: { examId: string; ready: 
   );
 }
 
-export function GoalForm({ examId, current }: { examId: string; current: number | null }) {
+export function GoalForm({
+  examId,
+  language,
+  target,
+  examSize,
+  officialPass,
+  submitLabel = "Save",
+}: {
+  examId: string;
+  language: "en" | "id" | null;
+  target: number | null;
+  examSize: number | null;
+  officialPass: number | null;
+  submitLabel?: string;
+}) {
   const f = useForm(saveGoal);
   return (
     <form action={f.action} className="flex flex-col gap-4" noValidate>
       <FocusFirstError trigger={f.state.error} />
       <input type="hidden" name="examId" value={examId} />
-      <Field id="target" label="Target score (0–100)" help="Used as your personal passing score. Leave empty to use the official one." error={f.err("target")}>
-        <input id="target" name="target" type="number" min={0} max={100} step="0.1" defaultValue={current ?? ""} className={inputClass} {...f.aria("target")} />
-      </Field>
-      <Button type="submit" variant="outline" disabled={f.pending}>
-        Save target
+      {language ? (
+        <p className="text-sm">
+          <span className="font-medium">Question language:</span> {language === "en" ? "English" : "Indonesian"}
+          <span className="text-muted-foreground"> · shared by everyone studying this exam</span>
+        </p>
+      ) : (
+        <Field id="language" label="Question language" help="Shared by everyone studying this exam." error={f.err("language")}>
+          <select id="language" name="language" defaultValue="" className={inputClass} {...f.aria("language")}>
+            <option value="" disabled>
+              Choose…
+            </option>
+            <option value="en">English</option>
+            <option value="id">Indonesian</option>
+          </select>
+        </Field>
+      )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field
+          id="target"
+          label="Target score (optional)"
+          help={officialPass != null ? `Official passing score: ${officialPass}. Leave empty to use it.` : "Your personal passing score, 0–100."}
+          error={f.err("target")}
+        >
+          <input id="target" name="target" type="number" min={0} max={100} step="0.1" defaultValue={target ?? ""} className={inputClass} {...f.aria("target")} />
+        </Field>
+        <Field id="examSize" label="Questions in the real exam (optional)" help="Used as the default practice length." error={f.err("examSize")}>
+          <input id="examSize" name="examSize" type="number" min={1} max={500} defaultValue={examSize ?? ""} className={inputClass} {...f.aria("examSize")} />
+        </Field>
+      </div>
+      <Button type="submit" disabled={f.pending} className="self-start">
+        {f.pending ? "Saving…" : submitLabel}
       </Button>
       <Status state={f.state} />
     </form>
