@@ -31,7 +31,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </Link>
             )}
           </nav>
-          <span className="hidden text-sm text-muted-foreground sm:inline">{user.email}</span>
+          <Link href="/akun" className={`${navLink} hidden sm:inline`}>
+            {user.email}
+          </Link>
+          <Link href="/akun" className={`${navLink} sm:hidden`}>
+            Akun
+          </Link>
           <form action={signOut}>
             <button type="submit" className={`${navLink} inline-flex min-h-11 items-center gap-1 cursor-pointer`}>
               <LogOut aria-hidden="true" className="size-4" />
