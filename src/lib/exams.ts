@@ -27,7 +27,7 @@ export async function findCatalog(name: string) {
 export async function findOrCreateExam(name: string, userId: string) {
   const db = createAdminClient();
   const slug = slugify(name);
-  if (!slug) throw new Error("Nama ujian tidak valid");
+  if (!slug) throw new Error("Invalid exam name");
 
   let catalog = await findCatalog(name);
   if (!catalog) {

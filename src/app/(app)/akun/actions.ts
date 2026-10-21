@@ -10,16 +10,16 @@ export async function changePassword(_prev: PasswordState, form: FormData): Prom
   const password = String(form.get("password") ?? "");
   const confirm = String(form.get("confirm") ?? "");
 
-  if (!current) return { error: "Password lama wajib diisi", field: "current" };
-  if (password.length < 8) return { error: "Password baru minimal 8 karakter", field: "password" };
-  if (password === current) return { error: "Password baru harus berbeda dari yang lama", field: "password" };
-  if (password !== confirm) return { error: "Konfirmasi tidak sama dengan password baru", field: "confirm" };
+  if (!current) return { error: "Enter your current password", field: "current" };
+  if (password.length < 8) return { error: "The new password needs at least 8 characters", field: "password" };
+  if (password === current) return { error: "The new password must be different from the current one", field: "password" };
+  if (password !== confirm) return { error: "The passwords do not match", field: "confirm" };
 
   // Re-check the current password so an unattended logged-in session cannot change it.
   const { error: authError } = await supabase.auth.signInWithPassword({ email, password: current });
-  if (authError) return { error: "Password lama salah", field: "current" };
+  if (authError) return { error: "Your current password is wrong", field: "current" };
 
   const { error } = await supabase.auth.updateUser({ password });
-  if (error) return { error: `Gagal mengganti password: ${error.message}`, field: "password" };
-  return { message: "Password berhasil diganti" };
+  if (error) return { error: `Could not change the password: ${error.message}`, field: "password" };
+  return { message: "Password changed" };
 }

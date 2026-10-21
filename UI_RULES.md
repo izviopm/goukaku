@@ -9,6 +9,14 @@ Aturan ini wajib diikuti untuk setiap komponen dan halaman. Jika ada yang berten
 - **Jelas untuk belajar.** Jawaban benar, salah, dan penjelasan harus terbaca sekilas.
 - **Aksesibel secara default.** Semua aturan kontras dan fokus di bawah wajib, tidak opsional.
 
+## 1a. Bahasa antarmuka
+
+- **Semua teks UI memakai bahasa Inggris**: label, tombol, judul, pesan error, empty state, notifikasi, dan metadata halaman. Jangan mencampur bahasa Indonesia atau istilah Jepang di teks UI.
+- Satu-satunya teks Jepang adalah merek "合格" di logo (dengan `lang="ja"`).
+- `<html lang="en">`.
+- Pengecualian: isi soal ujian mengikuti `exam_catalog.language`, dan balasan chat AI mengikuti bahasa yang dipakai user.
+- URL route (`/ujian`, `/riwayat`, `/simulasi`, `/akun`) tetap seperti di PRD.
+
 ## 2. Teknologi
 
 - **Tailwind CSS** adalah satu-satunya sumber styling. Tidak ada CSS module atau inline style, kecuali untuk nilai dinamis.
@@ -60,6 +68,15 @@ Palet dasar: **biru ai (藍)** sebagai warna utama dan **oranye mikan pastel (�
 | `ring` | `#2F5D8C` | Outline fokus |
 | `success` | `#166534` | Teks benar. Selalu disertai ikon dan teks, tidak hanya warna |
 | `destructive` | `#B91C1C` | Teks salah atau aksi hapus. Selalu disertai ikon dan teks |
+| `primary-strong` | `#234A70` | Hover tombol utama dan ujung gradien hero. Kontras sekitar 9:1 dengan putih |
+| `ai` | `#6D28D9` | Ikon dan teks yang menandai AI (violet). Kontras sekitar 7:1 dengan putih dan sekitar 6:1 di atas `ai-soft` |
+| `ai-soft` | `#EDE9FE` | Latar violet pastel untuk balasan AI, badge AI, dan status AI |
+| `ai-border` | `#C4B5FD` | Garis batas elemen AI (dekoratif, bukan batas kontrol) |
+
+### Penanda AI
+
+- Semua yang berasal dari AI (balasan chat, status "AI sedang berpikir", soal buatan AI) memakai warna `ai`/`ai-soft` dan ikon `Sparkles` dari Lucide.
+- Jangan memakai logo merek provider (Gemini, OpenAI, Anthropic) sebagai ikon AI, karena provider bisa diganti admin.
 
 ### Aturan warna
 
@@ -77,7 +94,7 @@ Hasil `ui-ux-pro-max --design-system` menyarankan aksen oranye `#EA580C` dan fon
 
 Unsur Jepang dipakai dengan takaran kecil:
 
-- **Istilah**: "Goukaku" (合格), "Moshi" untuk tryout, "Renshuu" (練習) untuk latihan. Gunakan di judul halaman dan label, jangan di setiap kalimat.
+- **Istilah**: hanya merek "Goukaku" (合格). Istilah Jepang lain (Moshi, Renshuu, dan sejenisnya) tidak dipakai di UI, lihat bagian 1a.
 - **Pola latar** (opsional): pola *seigaiha* (ombak) atau *asanoha* (daun hemp) dalam SVG tipis, opacity maksimal 6%, hanya di header atau hero. Tidak di area konten.
 - **Ikon**: gunakan ikon garis sederhana. Hindari ikon bergaya kartun.
 - **Hal yang dihindari**: gerbang torii, kimono, bunga sakura berjatuhan, dan elemen dekoratif lain yang mengganggu konten.
@@ -137,10 +154,12 @@ Uji di 375px, 768px, 1024px, dan 1440px. Desain mobile-first, dengan kelas Tailw
 
 ## 8. Motion
 
-- Transisi UI 150–250ms, dengan easing `ease-out` untuk masuk dan `ease-in` untuk keluar.
-- Animasi hanya untuk umpan balik (jawaban benar atau salah, indikator loading), tidak untuk dekorasi.
-- Hormati `prefers-reduced-motion`: gunakan kelas `motion-safe:` untuk semua animasi, dan `motion-reduce:` untuk versi tanpa gerak.
-- Tidak ada animasi yang berulang tanpa henti.
+- Library animasi: **Motion** (`motion/react`, motion.dev). Pakai helper di `src/components/motion.tsx` (`Reveal`, `Stagger`/`StaggerItem`, `AnimatedBar`, `spring`, `easeOut`) agar gerak konsisten.
+- Yang boleh dianimasikan: masuknya hero dan kartu (fade + naik 12px, stagger sekitar 60ms), gelembung chat, perpindahan antar soal, panel umpan balik jawaban, bar progres, dan tekanan tombol.
+- Durasi 200–350ms. Masuk memakai `easeOut` atau `spring`; keluar lebih cepat dari masuk.
+- Animasikan hanya `transform` dan `opacity`. Bar progres memakai `scaleX`, bukan `width`.
+- Hormati `prefers-reduced-motion`: `MotionProvider` (`MotionConfig reducedMotion="user"`) membungkus seluruh app, dan animasi CSS memakai `motion-safe:`.
+- Tidak ada animasi yang berulang tanpa henti, kecuali indikator loading selama request berjalan.
 
 ## 9. Aksesibilitas
 
@@ -152,7 +171,7 @@ Wajib dipenuhi di setiap halaman:
 - Ikon hiasan di samping teks memakai `aria-hidden="true"`. Ikon tanpa teks wajib punya `aria-label`.
 - Tombol pilihan jawaban memakai `aria-pressed` atau `role="radio"` dalam `role="radiogroup"`, sesuai pola yang dipilih.
 - Pesan dinamis (jawaban benar atau salah, hasil simulasi) diumumkan lewat `aria-live="polite"`.
-- Bahasa halaman diatur di `<html lang>`. Gunakan `lang="ja"` pada elemen teks Jepang.
+- Bahasa halaman diatur di `<html lang="en">`. Gunakan `lang="ja"` pada elemen teks Jepang.
 - Form login dan password mendukung password manager dan paste.
 - Tidak ada drag-only interaction tanpa alternatif keyboard.
 
@@ -187,3 +206,7 @@ Sudah diputuskan (2026-10-21):
 | Tanggal | Perubahan | Alasan |
 |---|---|---|
 | 2026-10-21 | Palet awal biru ai dan oranye mikan pastel | Permintaan awal |
+| 2026-10-21 | Tambah `primary-strong` `#234A70` (hover tombol utama, ujung gradien hero; kontras dengan putih sekitar 9:1). `shadow-sm` diberi rona biru ai dengan kekuatan yang sama | Redesign agar tidak terasa flat |
+| 2026-10-21 | UI berbahasa Inggris (bagian 1a); dashboard tanpa ujian hanya menampilkan form buat ujian | Permintaan user: teks campur terasa aneh |
+| 2026-10-21 | Tambah `ai`, `ai-soft`, `ai-border` (violet pastel) dan aturan penanda AI | Permintaan user: chat AI harus terlihat jelas sebagai AI |
+| 2026-10-21 | Bagian 8 diganti: animasi memakai Motion (motion.dev), tidak lagi dibatasi hanya untuk umpan balik | Permintaan user: transisi dan animasi yang lebih hidup |

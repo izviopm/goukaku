@@ -7,14 +7,14 @@ export const normalize = (s: string) => s.normalize("NFKC").toLowerCase().replac
 
 /** PRD 5, step 1: option count, exactly one key, key exists among options. Returns an error or null. */
 export function structureError(q: QuestionInput): string | null {
-  if (!q.body?.trim()) return "Teks soal kosong";
+  if (!q.body?.trim()) return "The question text is empty";
   if (!Array.isArray(q.options) || q.options.length < 2 || q.options.length > LETTERS.length)
-    return "Jumlah opsi harus 2 sampai 5";
-  if (q.options.some((o) => typeof o !== "string" || !o.trim())) return "Ada opsi yang kosong";
-  if (new Set(q.options.map(normalize)).size !== q.options.length) return "Ada opsi yang sama";
+    return "A question needs 2 to 5 options";
+  if (q.options.some((o) => typeof o !== "string" || !o.trim())) return "An option is empty";
+  if (new Set(q.options.map(normalize)).size !== q.options.length) return "Two options are the same";
   const a = q.answer?.trim().toUpperCase();
-  if (!a || !/^[A-E]$/.test(a)) return "Kunci harus tepat satu huruf A–E";
-  if (LETTERS.indexOf(a) >= q.options.length) return "Kunci tidak ada di opsi";
+  if (!a || !/^[A-E]$/.test(a)) return "The answer must be exactly one letter from A to E";
+  if (LETTERS.indexOf(a) >= q.options.length) return "The answer is not one of the options";
   return null;
 }
 
@@ -38,6 +38,20 @@ export function topicPlan(blueprint: { topic: string; percentage: number }[], to
     c.n++;
   }
   return counts.flatMap((c) => Array(c.n).fill(c.topic));
+}
+
+export type ModelSettings = { models: { id: string; name: string }[]; main: string; verifiers: string[] };
+
+/** Admin model list: unique non-empty ids, main model in the list, 0 or at least 2 distinct verifiers from the list. */
+export function modelSettingsError({ models, main, verifiers }: ModelSettings): string | null {
+  if (!models.length) return "Add at least one model";
+  if (models.some((m) => !m.id.trim())) return "A model ID is empty";
+  const ids = models.map((m) => m.id.trim());
+  if (new Set(ids).size !== ids.length) return "Two models have the same ID";
+  if (!ids.includes(main)) return "Choose a main model from the list";
+  if (verifiers.some((v) => !ids.includes(v))) return "Verifier models must come from the list";
+  if (verifiers.length === 1 || new Set(verifiers).size !== verifiers.length) return "Choose at least 2 different verifier models";
+  return null;
 }
 
 /** RFC 4180-style CSV: quoted fields, escaped quotes, commas and newlines inside quotes. */
@@ -80,7 +94,7 @@ export function questionsFromCsv(text: string): QuestionInput[] {
   if (!header) return [];
   const col = (name: string) => header.findIndex((h) => h.trim().toLowerCase() === name);
   const qi = col("question");
-  if (qi < 0) throw new Error('Kolom "question" tidak ditemukan di header CSV');
+  if (qi < 0) throw new Error('The CSV header has no "question" column');
   const opts = ["a", "b", "c", "d", "e"].map(col).filter((i) => i >= 0);
   return rows.map((r) => ({
     body: r[qi] ?? "",
@@ -94,7 +108,7 @@ export function questionsFromCsv(text: string): QuestionInput[] {
 /** JSON: array of {question|body, options[], answer, explanation?, topic?}. */
 export function questionsFromJson(text: string): QuestionInput[] {
   const data = JSON.parse(text);
-  if (!Array.isArray(data)) throw new Error("JSON harus berupa array soal");
+  if (!Array.isArray(data)) throw new Error("The JSON must be an array of questions");
   return data.map((q) => ({
     body: String(q.body ?? q.question ?? ""),
     options: Array.isArray(q.options) ? q.options.map(String) : [],

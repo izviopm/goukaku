@@ -11,7 +11,7 @@ export function CreateExamForm() {
   return (
     <form action={action} className="flex flex-col gap-4" noValidate>
       <FocusFirstError trigger={state} />
-      <Field id="exam-name" label="Nama ujian" help='Contoh: "CGI" atau "TOEFL". Nama yang sama menuju bank yang sama.' error={state.error}>
+      <Field id="exam-name" label="Exam name" help='For example "CGI" or "TOEFL". The same name always leads to the same question bank.' error={state.error}>
         <input
           id="exam-name"
           name="name"
@@ -23,7 +23,7 @@ export function CreateExamForm() {
       </Field>
       <Button type="submit" disabled={pending}>
         <Plus aria-hidden="true" className="size-4" />
-        {pending ? "Membuat…" : "Buat ujian"}
+        {pending ? "Creating…" : "Create exam"}
       </Button>
     </form>
   );

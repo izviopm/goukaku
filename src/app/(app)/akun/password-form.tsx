@@ -22,17 +22,17 @@ export function PasswordForm() {
   return (
     <form ref={formRef} action={action} className="flex flex-col gap-4" noValidate>
       <FocusFirstError trigger={state.error ? state : null} />
-      <Field id="current" label="Password lama" error={err("current")}>
+      <Field id="current" label="Current password" error={err("current")}>
         <input id="current" name="current" type="password" autoComplete="current-password" required className={inputClass} {...aria("current")} />
       </Field>
-      <Field id="password" label="Password baru" help="Minimal 8 karakter." error={err("password")}>
+      <Field id="password" label="New password" help="At least 8 characters." error={err("password")}>
         <input id="password" name="password" type="password" autoComplete="new-password" required minLength={8} className={inputClass} {...aria("password")} />
       </Field>
-      <Field id="confirm" label="Ulangi password baru" error={err("confirm")}>
+      <Field id="confirm" label="Repeat new password" error={err("confirm")}>
         <input id="confirm" name="confirm" type="password" autoComplete="new-password" required className={inputClass} {...aria("confirm")} />
       </Field>
       <Button type="submit" disabled={pending}>
-        {pending ? "Menyimpan…" : "Ganti password"}
+        {pending ? "Saving…" : "Change password"}
       </Button>
       <div aria-live="polite">
         {state.message && (

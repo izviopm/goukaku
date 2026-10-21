@@ -169,8 +169,10 @@ simulations         id, user_id, exam_id, size, feedback_mode ('instant' | 'end'
                     started_at, finished_at, score, pass_score_snapshot
 simulation_items    id, simulation_id, position, question_id, snapshot jsonb,
                     user_answer, is_correct, ai_score, ai_feedback, answered_at
-ai_settings         id (singleton), provider, model, api_key_secret_id
+ai_settings         id (singleton), provider ('openai' | 'anthropic' | 'gemini' | 'openai_compatible'),
+                    model, base_url (hanya openai_compatible), api_key_secret_id
                     -- id rahasia di Supabase Vault; key terenkripsi di vault.secrets
+                    -- daftar model {id, name} di app_settings.ai_models
                     -- model verifikasi (blind solve) di app_settings.verifier_models
 app_settings        key, value jsonb
 user_limits         user_id, ai_calls_per_day, questions_generated_per_day,

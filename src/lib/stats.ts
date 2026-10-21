@@ -2,7 +2,7 @@
 export function topicStats(items: { is_correct: boolean | null; snapshot: unknown }[]) {
   const map = new Map<string, { correct: number; total: number }>();
   for (const it of items) {
-    const topic = ((it.snapshot as { topic?: string })?.topic || "Tanpa topik").trim();
+    const topic = ((it.snapshot as { topic?: string })?.topic || "No topic").trim();
     const s = map.get(topic) ?? { correct: 0, total: 0 };
     s.total++;
     if (it.is_correct) s.correct++;

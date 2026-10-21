@@ -24,7 +24,7 @@ export function ActionForm({
       {children}
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={pending}>
-          {pending ? "Menyimpan…" : submit}
+          {pending ? "Saving…" : submit}
         </Button>
         <div aria-live="polite" className="text-sm">
           {state.message && (

@@ -19,7 +19,7 @@ export async function runJob(jobId: string) {
   try {
     const { data: exam } = await db.from("exams").select("id, exam_catalog(display_name, language)").eq("id", job.exam_id).single();
     const catalog = exam?.exam_catalog as unknown as { display_name: string; language: "id" | "en" | null };
-    if (!catalog?.language) throw new AIError("Bahasa soal belum ditentukan untuk ujian ini.");
+    if (!catalog?.language) throw new AIError("The question language for this exam is not set yet.");
 
     // 1. Shared bank: questions others already added that are not in this user's pool yet.
     const { data: pool } = await db.from("user_exam_pool").select("question_id").eq("user_id", job.user_id).eq("exam_id", job.exam_id);
@@ -39,7 +39,7 @@ export async function runJob(jobId: string) {
     if (remaining > 0) {
       const { data: bp } = await db.from("exam_blueprints").select("topic, percentage, confirmed_by").eq("exam_id", job.exam_id);
       const confirmed = (bp ?? []).filter((b) => b.confirmed_by);
-      if (!confirmed.length) throw new AIError("Blueprint ujian belum dikonfirmasi.");
+      if (!confirmed.length) throw new AIError("The exam blueprint is not confirmed yet.");
 
       for (const topics of chunk(topicPlan(confirmed, remaining))) {
         const { data: existing } = await db

@@ -12,9 +12,9 @@ import { createAdminClient } from "@/lib/supabase/server";
 export type FormState = { error?: string; field?: string; message?: string };
 
 const SIM_ERRORS: Record<string, string> = {
-  NO_QUESTIONS: "Belum ada soal terverifikasi yang bisa dipakai. Tambah soal dulu, atau tunggu verifikasi selesai.",
-  BAD_SIZE: "Jumlah soal 1–200.",
-  BAD_MODE: "Pilih mode umpan balik.",
+  NO_QUESTIONS: "There are no verified questions to use yet. Add questions first, or wait for verification to finish.",
+  BAD_SIZE: "Choose between 1 and 200 questions.",
+  BAD_MODE: "Choose a feedback mode.",
 };
 
 export async function startSimulation(_prev: FormState, form: FormData): Promise<FormState> {
@@ -56,15 +56,15 @@ export async function uploadWithAnswers(_prev: FormState, form: FormData): Promi
       ];
     }
   } catch (e) {
-    return { error: `File tidak bisa dibaca: ${e instanceof Error ? e.message : e}`, field: "file" };
+    return { error: `Could not read the file: ${e instanceof Error ? e.message : e}`, field: "file" };
   }
 
-  if (!items.length) return { error: "Tidak ada soal ditemukan", field: "file" };
-  if (items.length > 500) return { error: "Maksimal 500 soal per upload", field: "file" };
+  if (!items.length) return { error: "No questions found", field: "file" };
+  if (items.length > 500) return { error: "Upload at most 500 questions at a time", field: "file" };
   const bad = items.map((q, i) => [i + 1, structureError(q)] as const).filter(([, e]) => e);
   if (bad.length)
     return {
-      error: `Perbaiki dulu: ${bad.slice(0, 5).map(([n, e]) => `soal ${n}: ${e}`).join("; ")}${bad.length > 5 ? ` (+${bad.length - 5} lainnya)` : ""}`,
+      error: `Please fix: ${bad.slice(0, 5).map(([n, e]) => `question ${n}: ${e}`).join("; ")}${bad.length > 5 ? ` (+${bad.length - 5} more)` : ""}`,
       field: file instanceof File && file.size > 0 ? "file" : "body",
     };
 
@@ -76,7 +76,7 @@ export async function uploadWithoutAnswers(_prev: FormState, form: FormData): Pr
   const user = await getUser();
   const examId = String(form.get("examId"));
   const file = form.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "Pilih file PDF atau teks", field: "file-b" };
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a PDF or text file", field: "file-b" };
 
   let text: string;
   try {
@@ -85,11 +85,11 @@ export async function uploadWithoutAnswers(_prev: FormState, form: FormData): Pr
       text = (await extractText(pdf, { mergePages: true })).text;
     } else text = await file.text();
   } catch {
-    return { error: "File tidak bisa dibaca", field: "file-b" };
+    return { error: "Could not read the file", field: "file-b" };
   }
   text = text.trim();
-  if (!text) return { error: "File tidak berisi teks (PDF hasil scan belum didukung)", field: "file-b" };
-  if (text.length > 60000) return { error: "Teks terlalu panjang (maks sekitar 60.000 karakter). Pecah file-nya.", field: "file-b" };
+  if (!text) return { error: "The file has no text (scanned PDFs are not supported yet)", field: "file-b" };
+  if (text.length > 60000) return { error: "The text is too long (about 60,000 characters max). Split the file.", field: "file-b" };
 
   try {
     const pieces = text.match(/[\s\S]{1,12000}/g) ?? [];
@@ -98,13 +98,13 @@ export async function uploadWithoutAnswers(_prev: FormState, form: FormData): Pr
       await consumeQuota(user.id, 1);
       const reply = await complete({
         system:
-          "Ekstrak setiap soal pilihan ganda dari teks berikut apa adanya, tanpa mengubah isi soal dan opsi. " +
-          'Balas HANYA JSON array: [{"body": "...", "options": ["..."], "topic": "..."}]. Abaikan teks yang bukan soal.',
+          "Extract every multiple-choice question from the following text exactly as written, without changing the question or options. " +
+          'Reply ONLY with a JSON array: [{"body": "...", "options": ["..."], "topic": "..."}]. Ignore text that is not a question.',
         messages: [{ role: "user", content: piece }],
       });
       items.push(...extractJson<QuestionInput[]>(reply).filter((q) => q?.body && Array.isArray(q.options)));
     }
-    if (!items.length) return { error: "AI tidak menemukan soal pilihan ganda di file ini", field: "file-b" };
+    if (!items.length) return { error: "The AI found no multiple-choice questions in this file", field: "file-b" };
 
     // The answering model fills in the key; independent verifier models then blind-solve it.
     for (const batch of chunk(items)) {
@@ -113,7 +113,7 @@ export async function uploadWithoutAnswers(_prev: FormState, form: FormData): Pr
     }
     return finish(user.id, examId, items.filter((q) => !structureError(q)), "user_pdf_ai_answered");
   } catch (e) {
-    return { error: e instanceof AIError ? e.message : "Gagal memproses file dengan AI", field: "file-b" };
+    return { error: e instanceof AIError ? e.message : "Could not process the file with AI", field: "file-b" };
   }
 }
 
@@ -124,12 +124,12 @@ async function finish(userId: string, examId: string, items: QuestionInput[], or
     try {
       await verifyQuestions(userId, newIds);
     } catch (e) {
-      note = ` Verifikasi tertunda: ${e instanceof Error ? e.message : e}`;
+      note = ` Verification is pending: ${e instanceof Error ? e.message : e}`;
     }
     revalidatePath("/ujian/[slug]", "page");
-    return { message: `${newIds.length} soal baru masuk bank, ${existing} sudah ada sebelumnya (dipakai ulang).${note}` };
+    return { message: `${newIds.length} new questions added to the bank, ${existing} already existed and were reused.${note}` };
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Gagal menyimpan", field: "file" };
+    return { error: e instanceof Error ? e.message : "Could not save", field: "file" };
   }
 }
 
@@ -150,12 +150,12 @@ export async function saveGoal(_prev: FormState, form: FormData): Promise<FormSt
   if (raw === "") {
     await supabase.from("user_exam_goal").delete().eq("user_id", id).eq("exam_id", examId);
     revalidatePath("/ujian/[slug]", "page");
-    return { message: "Target dihapus" };
+    return { message: "Target removed" };
   }
   const target = Number(raw);
-  if (!Number.isFinite(target) || target < 0 || target > 100) return { error: "Target 0–100", field: "target" };
+  if (!Number.isFinite(target) || target < 0 || target > 100) return { error: "Target must be between 0 and 100", field: "target" };
   const { error } = await supabase.from("user_exam_goal").upsert({ user_id: id, exam_id: examId, target_score: target });
   if (error) return { error: error.message, field: "target" };
   revalidatePath("/ujian/[slug]", "page");
-  return { message: "Target disimpan" };
+  return { message: "Target saved" };
 }

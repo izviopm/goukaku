@@ -30,7 +30,7 @@ Tidak ada pendaftaran mandiri. Akun dibuat oleh admin.
 - **Tailwind CSS** untuk styling
 - **Supabase**: Postgres, Auth, RLS, dan Vault untuk enkripsi API key
 - **Vercel** untuk hosting
-- Provider AI dipilih admin (OpenAI, Anthropic, Gemini, dan lainnya lewat satu lapisan adapter)
+- Provider AI dipilih admin (OpenAI, Anthropic, Gemini, atau provider OpenAI-compatible dengan Base URL sendiri) lewat satu lapisan adapter
 
 ## Dokumen
 

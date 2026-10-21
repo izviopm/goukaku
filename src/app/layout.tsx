@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Noto_Sans_JP, Plus_Jakarta_Sans } from "next/font/google";
+import { MotionProvider } from "@/components/motion";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -19,13 +20,15 @@ const notoJp = Noto_Sans_JP({
 
 export const metadata: Metadata = {
   title: "Goukaku",
-  description: "Simulasi ujian sertifikasi untuk belajar",
+  description: "Certification exam practice with verified answer keys",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="id" className={`${jakarta.variable} ${notoJp.variable}`}>
-      <body className="min-h-dvh font-sans">{children}</body>
+    <html lang="en" className={`${jakarta.variable} ${notoJp.variable}`}>
+      <body className="min-h-dvh font-sans">
+        <MotionProvider>{children}</MotionProvider>
+      </body>
     </html>
   );
 }

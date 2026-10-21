@@ -37,7 +37,7 @@ export async function saveQuestions(examId: string, userId: string, items: Quest
     .from("questions")
     .upsert([...rows.values()], { onConflict: "exam_id,content_hash", ignoreDuplicates: true })
     .select("id");
-  if (error) throw new Error(`Gagal menyimpan soal: ${error.message}`);
+  if (error) throw new Error(`Could not save questions: ${error.message}`);
 
   const { data: all, error: e2 } = await db
     .from("questions")
@@ -105,7 +105,7 @@ export async function verifyQuestions(userId: string, ids: string[]) {
     for (const q of valid)
       await db
         .from("questions")
-        .update({ answer_status: "unverified", verification: { checked_at: now, structure: "ok", note: "Admin belum mengatur minimal 2 model verifikasi" } })
+        .update({ answer_status: "unverified", verification: { checked_at: now, structure: "ok", note: "The admin has not set at least 2 verifier models" } })
         .eq("id", q.id);
     return;
   }

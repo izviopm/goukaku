@@ -1,15 +1,16 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 
-export type Provider = "openai" | "anthropic" | "gemini";
+export type Provider = "openai" | "anthropic" | "gemini" | "openai_compatible";
+export type AiModel = { id: string; name: string };
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 type CallOptions = { system: string; messages: ChatMessage[]; model?: string; webSearch?: boolean };
 
 const LIMIT_MESSAGES: Record<string, string> = {
-  AI_DISABLED: "AI sedang dinonaktifkan oleh admin.",
-  GLOBAL_LIMIT: "Batas harian AI untuk seluruh aplikasi sudah tercapai. Coba lagi besok.",
-  USER_CALL_LIMIT: "Batas panggilan AI harian kamu sudah tercapai.",
-  USER_QUESTION_LIMIT: "Batas jumlah soal yang dibuat AI hari ini sudah tercapai.",
+  AI_DISABLED: "AI is turned off by the admin.",
+  GLOBAL_LIMIT: "The app-wide daily AI limit has been reached. Try again tomorrow.",
+  USER_CALL_LIMIT: "You have reached your daily AI call limit.",
+  USER_QUESTION_LIMIT: "You have reached today's limit for AI-generated questions.",
 };
 
 export class AIError extends Error {}
@@ -23,18 +24,29 @@ export async function consumeQuota(userId: string, calls: number, questions = 0)
   });
   if (error) {
     const code = Object.keys(LIMIT_MESSAGES).find((k) => error.message.includes(k));
-    throw new AIError(code ? LIMIT_MESSAGES[code] : `Gagal mengecek limit: ${error.message}`);
+    throw new AIError(code ? LIMIT_MESSAGES[code] : `Could not check the AI limit: ${error.message}`);
   }
 }
 
 async function getConfig() {
   const db = createAdminClient();
   const [{ data: settings }, { data: key }] = await Promise.all([
-    db.from("ai_settings").select("provider, model").eq("id", true).maybeSingle(),
+    db.from("ai_settings").select("provider, model, base_url").eq("id", true).maybeSingle(),
     db.rpc("get_ai_api_key"),
   ]);
-  if (!settings || !key) throw new AIError("AI belum dikonfigurasi admin (provider, model, atau API key).");
-  return { provider: settings.provider as Provider, model: settings.model as string, apiKey: key as string };
+  if (!settings || !key) throw new AIError("AI is not set up yet. Ask the admin to set the provider, model, and API key.");
+  return {
+    provider: settings.provider as Provider,
+    model: settings.model as string,
+    baseUrl: (settings.base_url as string | null) ?? "",
+    apiKey: key as string,
+  };
+}
+
+/** OpenAI-compatible endpoints have no standard web search tool. */
+export async function webSearchAvailable() {
+  const { data } = await createAdminClient().from("ai_settings").select("provider").eq("id", true).maybeSingle();
+  return !!data && data.provider !== "openai_compatible";
 }
 
 export async function getVerifierModels(): Promise<string[]> {
@@ -62,6 +74,16 @@ export async function complete({ system, messages, model, webSearch }: CallOptio
     });
     const json = await readJson(res);
     return json.content.filter((b: { type: string }) => b.type === "text").map((b: { text: string }) => b.text).join("");
+  }
+
+  if (cfg.provider === "openai_compatible") {
+    res = await fetch(`${cfg.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${cfg.apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ model: m, messages: [{ role: "system", content: system }, ...messages] }),
+    });
+    const json = await readJson(res);
+    return json.choices?.[0]?.message?.content ?? "";
   }
 
   if (cfg.provider === "openai") {
@@ -99,7 +121,7 @@ export async function complete({ system, messages, model, webSearch }: CallOptio
 
 async function readJson(res: Response) {
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new AIError(`Provider AI menolak permintaan (${res.status}): ${json?.error?.message ?? "tanpa detail"}`);
+  if (!res.ok) throw new AIError(`The AI provider rejected the request (${res.status}): ${json?.error?.message ?? "no details"}`);
   return json;
 }
 
@@ -109,6 +131,6 @@ export function extractJson<T>(text: string): T {
   const raw = fenced ? fenced[1] : text;
   const start = raw.search(/[[{]/);
   const end = Math.max(raw.lastIndexOf("}"), raw.lastIndexOf("]"));
-  if (start < 0 || end < start) throw new AIError("Balasan AI tidak berisi JSON yang valid.");
+  if (start < 0 || end < start) throw new AIError("The AI reply did not contain valid JSON.");
   return JSON.parse(raw.slice(start, end + 1)) as T;
 }
