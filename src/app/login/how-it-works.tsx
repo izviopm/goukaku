@@ -41,11 +41,54 @@ function CreateVisual() {
   );
 }
 
+function BlueprintVisual() {
+  const rows = [
+    { topic: "Security", pct: 40 },
+    { topic: "Networking", pct: 35 },
+    { topic: "Cloud basics", pct: 25 },
+  ];
+  return (
+    <div className="flex flex-col gap-3">
+      <motion.p {...appear(0.1)} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <span>
+          <span className="font-medium">Target</span> 80
+        </span>
+        <span className="text-muted-foreground">·</span>
+        <span>
+          <span className="font-medium">Language</span> English
+        </span>
+      </motion.p>
+      <motion.span {...appear(0.4)} className="inline-flex items-center gap-1.5 self-start rounded-full bg-ai-soft px-3 py-1 text-xs font-medium text-ai">
+        <Sparkles aria-hidden="true" className="size-3.5" /> Suggested by AI from the official guide
+      </motion.span>
+      {rows.map((r, i) => (
+        <motion.div key={r.topic} {...appear(0.7 + i * 0.2)} className="flex flex-col gap-1 text-sm">
+          <div className="flex justify-between">
+            <span>{r.topic}</span>
+            <span className="font-semibold tabular-nums">{r.pct}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <AnimatedBar value={r.pct} className="bg-primary" />
+          </div>
+        </motion.div>
+      ))}
+      <motion.span
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ ...spring, delay: 1.6 }}
+        className="self-end rounded-full bg-success/10 px-3 py-1 text-sm font-semibold text-success"
+      >
+        Total 100%
+      </motion.span>
+    </div>
+  );
+}
+
 function AddVisual() {
   const sources = [
-    { icon: FileSpreadsheet, label: "CSV with answers", cls: "bg-primary-soft text-primary" },
-    { icon: FileText, label: "PDF without answers", cls: "bg-accent-soft text-accent-foreground" },
-    { icon: Sparkles, label: "Ask the AI", cls: "bg-ai-soft text-ai" },
+    { icon: FileSpreadsheet, label: "CSV or JSON", cls: "bg-primary-soft text-primary" },
+    { icon: FileText, label: "PDF or DOCX, with or without answers", cls: "bg-accent-soft text-accent-foreground" },
+    { icon: Sparkles, label: "Generate with AI", cls: "bg-ai-soft text-ai" },
   ];
   return (
     <div className="flex flex-col items-center gap-3">
@@ -87,8 +130,8 @@ function VerifyVisual() {
         <p className="font-medium">Which port does HTTPS use by default?</p>
         <p className="mt-1 text-muted-foreground">Key from the bank: B. 443</p>
       </div>
-      {["Model 1", "Model 2"].map((m, i) => (
-        <motion.div key={m} {...appear(0.4 + i * 0.6)} className="flex items-center gap-3 rounded-lg bg-ai-soft p-2.5 text-sm">
+      {["Model 1", "Model 2", "Model 3"].map((m, i) => (
+        <motion.div key={m} {...appear(0.4 + i * 0.45)} className="flex items-center gap-3 rounded-lg bg-ai-soft p-2 text-sm">
           <AiAvatar size="sm" />
           <span className="flex-1">
             {m} answers <span className="font-semibold">B</span> without seeing the key
@@ -110,11 +153,19 @@ function VerifyVisual() {
 
 function PracticeVisual() {
   const options = ["80", "443", "21", "25"];
+  const mix = ["Security 4", "Networking 4", "Cloud 2"];
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1.5">
+      <div className="mb-1 flex flex-wrap gap-1.5">
+        {mix.map((m, i) => (
+          <motion.span key={m} {...appear(0.1 + i * 0.12)} className="rounded-full bg-primary-soft px-2.5 py-0.5 text-xs font-medium text-primary">
+            {m}
+          </motion.span>
+        ))}
+      </div>
       <p className="text-sm font-medium">Which port does HTTPS use by default?</p>
       {options.map((o, i) => (
-        <div key={o} className="relative flex items-center gap-2 overflow-hidden rounded-lg border px-3 py-2 text-sm">
+        <div key={o} className="relative flex items-center gap-2 overflow-hidden rounded-lg border px-3 py-1.5 text-sm">
           {i === 1 && (
             <motion.span
               aria-hidden="true"
@@ -136,10 +187,10 @@ function PracticeVisual() {
 }
 
 function ReviewVisual() {
-  const topics = [
-    { name: "Security", pct: 90, cls: "bg-primary" },
-    { name: "Cloud basics", pct: 75, cls: "bg-primary" },
-    { name: "Networking", pct: 45, cls: "bg-accent" },
+  const questions = [
+    { q: "Which port does HTTPS use?", right: 3, wrong: 0, status: "Mastered", cls: "bg-primary-soft text-primary" },
+    { q: "What does a subnet mask do?", right: 1, wrong: 2, status: "Needs review", cls: "bg-accent-soft text-accent-foreground" },
+    { q: "What is a VPC?", right: 0, wrong: 0, status: "New", cls: "bg-ai-soft text-ai" },
   ];
   return (
     <div className="flex flex-col gap-3">
@@ -149,19 +200,19 @@ function ReviewVisual() {
           <CountUp to={82} delay={0.2} />
         </span>
       </div>
-      {topics.map((t) => (
-        <div key={t.name} className="flex flex-col gap-1 text-sm">
-          <div className="flex justify-between">
-            <span>{t.name}</span>
-            <span className="tabular-nums text-muted-foreground">{t.pct}%</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <AnimatedBar value={t.pct} className={t.cls} />
-          </div>
-        </div>
+      {questions.map((r, i) => (
+        <motion.div key={r.q} {...appear(0.5 + i * 0.25)} className="flex items-center gap-3 rounded-lg border px-3 py-2 text-sm">
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-medium">{r.q}</span>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {r.right} correct · {r.wrong} wrong
+            </span>
+          </span>
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${r.cls}`}>{r.status}</span>
+        </motion.div>
       ))}
-      <motion.p {...appear(1.3)} className="rounded-lg bg-accent-soft p-2.5 text-sm text-accent-foreground">
-        <span className="font-semibold">Weak topic:</span> Networking. Practice it next.
+      <motion.p {...appear(1.4)} className="text-sm text-muted-foreground">
+        Wrong answers come back first in your next run.
       </motion.p>
     </div>
   );
@@ -179,10 +230,31 @@ function CountUp({ to, delay = 0 }: { to: number; delay?: number }) {
 
 const STEPS = [
   { title: "Create an exam", text: "Type the certification you are studying for. The same name always opens the same shared question bank.", Visual: CreateVisual },
-  { title: "Add questions", text: "Upload a CSV, drop in a PDF without answers, or ask the AI. Duplicates are skipped automatically.", Visual: AddVisual },
-  { title: "AI checks every answer key", text: "Two different AI models answer each question without seeing the key. Only questions they agree on are used.", Visual: VerifyVisual },
-  { title: "Practice like the real exam", text: "Pick how many questions and whether you want feedback after each answer or only at the end.", Visual: PracticeVisual },
-  { title: "Review and improve", text: "Every run is saved. See your score per topic and which topics to practice next.", Visual: ReviewVisual },
+  {
+    title: "Set your goal and blueprint",
+    text: "Choose the question language and your target, then the topic mix. Let the AI suggest it from the official guide, or set it yourself.",
+    Visual: BlueprintVisual,
+  },
+  {
+    title: "Add questions",
+    text: "Upload a CSV, PDF, or DOCX, with or without answers, or let the AI write new ones that follow your blueprint. Duplicates are skipped.",
+    Visual: AddVisual,
+  },
+  {
+    title: "AI checks every answer key",
+    text: "Up to three AI models answer each question without seeing the key. Only questions they agree on are used.",
+    Visual: VerifyVisual,
+  },
+  {
+    title: "Practice with your exact mix",
+    text: "Every run follows your blueprint. New questions come first, then the ones you got wrong, so you practice what you need most.",
+    Visual: PracticeVisual,
+  },
+  {
+    title: "Review and improve",
+    text: "See how often you got each question right or wrong, which ones you have mastered, and which need review.",
+    Visual: ReviewVisual,
+  },
 ];
 
 export function HowItWorks() {
@@ -233,7 +305,7 @@ export function HowItWorks() {
         )}
       </div>
 
-      <ol className="grid grid-cols-5 gap-2">
+      <ol className="grid grid-cols-6 gap-1.5 sm:gap-2">
         {STEPS.map((s, i) => (
           <li key={s.title}>
             <button

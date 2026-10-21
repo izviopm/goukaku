@@ -15,10 +15,15 @@ Membantu user belajar untuk ujian sertifikasi lewat simulasi yang menyerupai uji
 
 1. **Login** (Supabase Auth). Akun dibuat admin.
 2. **Dashboard**: daftar ujian user dan tombol buat ujian baru.
-3. **Halaman ujian** (`/ujian/[slug]`): tambah soal, mulai simulasi, riwayat, analisis.
-4. **Tambah soal**, lewat chat atau upload (lihat bagian 5).
-5. **Simulasi**: pilih jumlah soal, pilih mode umpan balik, lalu kerjakan.
-6. **Riwayat dan analisis**.
+3. **Halaman ujian** (`/ujian/[slug]`), dua mode:
+   - **Setup** (langkah bertahap, langkah berikutnya terkunci sampai yang sebelumnya selesai):
+     1. **Goal**: bahasa soal (dibagi per ujian, diisi sekali), target skor (opsional), jumlah soal ujian asli (opsional).
+     2. **Blueprint** (bagian 6).
+     3. **Tambah soal** (bagian 5).
+   - **Practice**: terbuka jika goal tersimpan, ada blueprint, dan minimal 10 soal terverifikasi (atau sejumlah soal ujian asli jika lebih kecil). Berisi Start, ringkasan topik, tambah soal, dan pengaturan ujian.
+4. **Simulasi**: pilih jumlah soal, pilih mode umpan balik, lalu kerjakan (bagian 7).
+5. **Riwayat dan analisis** (bagian 8).
+6. **Asisten AI**: panel samping yang dibuka lewat tombol "Ask AI" di halaman ujian.
 
 ### Membuat ujian
 
@@ -36,19 +41,22 @@ Membantu user belajar untuk ujian sertifikasi lewat simulasi yang menyerupai uji
 
 ## 5. Penambahan soal
 
-Tiga jalur:
-
 | Jalur | Input | Kunci jawaban | Status awal |
 |---|---|---|---|
-| A. Soal + jawaban | Upload CSV/JSON atau input manual | Dari user | `unverified` |
-| B. Soal tanpa jawaban | Upload PDF/teks | AI yang menjawab | `unverified`, `origin = user_pdf_ai_answered` |
-| C. Minta AI | Perintah di chat, misalnya "tambahkan 60 soal CGI" | AI | `unverified`, `origin = ai_generated` |
+| **Upload a file** | CSV/JSON (dibaca langsung) atau PDF/DOCX/TXT (dibaca AI) | Kunci dari file jika ada; jika tidak, AI yang menjawab | `unverified`; `origin = user_upload` (kunci dari file) atau `user_pdf_ai_answered` |
+| **Manual** | Satu soal lewat form, wajib memilih topik | Dari user | `unverified`, `origin = user_upload` |
+| **Generate with AI** | Jumlah soal (tombol atau chat) | AI | `unverified`, `origin = ai_generated` |
+| **Prepare missing** | Dari kartu Start saat soal per topik kurang | AI | `unverified`, `origin = ai_generated` |
 
-### Alur bank bersama
+- Semua pekerjaan AI berjalan di latar belakang (`ai_jobs`) dengan progres dan ringkasan, misalnya "18 dengan kunci dari file, 7 dijawab AI".
+- Saat membaca dokumen atau membuat soal, AI memberi label topik dari daftar topik blueprint (atau topik yang sudah ada di bank), supaya soal terhitung ke kuota blueprint.
+- PDF hasil scan (gambar) belum didukung.
 
-1. Sebelum mencari di luar, sistem mengecek bank bersama untuk ujian tersebut.
-2. Soal yang sudah ada dipakai ulang. Soal yang sama tidak dibuat dua kali.
-3. Jika bank belum cukup, AI mencari atau membuat soal sesuai blueprint, lalu hasilnya masuk ke bank bersama.
+### Bank bersama
+
+1. Semua soal masuk ke bank bersama per ujian. Soal yang sama tidak dibuat dua kali (dedup).
+2. Saat simulasi dimulai, semua soal terverifikasi dari topik blueprint di bank bersama otomatis masuk ke bank pribadi user.
+3. Soal baru dibuat **hanya saat user meminta** (Generate, Prepare missing, atau chat). Tidak ada pengisian otomatis di latar belakang.
 
 ### Dedup
 
@@ -69,23 +77,34 @@ Soal baru tidak dipakai simulasi sampai `answer_status = verified`.
 
 Blueprint adalah daftar topik dan persentase soal untuk satu ujian.
 
-Urutan sumber:
+**Hibrida: default bersama dan versi pribadi.**
 
-1. Blueprint sudah ada di `exam_blueprints` → pakai.
-2. Cari di internet. Simpan `source_url`, status `source = web`, belum aktif sampai admin atau user mengonfirmasi.
-3. Tidak ketemu → AI bertanya ke user: user menentukan persentase, atau menyerahkan ke AI.
-4. Jika user menyerahkan ke AI, AI menentukan persentase dan menyimpannya dengan `source = ai`.
+- **Default** (`exam_blueprints`): diisi oleh user pertama yang menyimpan blueprint untuk ujian itu. Setelah itu hanya admin yang bisa mengubahnya (di `/admin`).
+- **Pribadi** (`user_blueprints`): user lain boleh menyimpan komposisinya sendiri. Ini tidak memengaruhi user lain. Tombol "Reset to default" kembali memakai default.
+- **Blueprint efektif** = pribadi jika ada, selain itu default.
 
-Sistem juga menjaga bahwa soal yang dihasilkan mengikuti blueprint.
+Cara mengisi:
+
+1. **Suggest with AI**: AI mencari panduan resmi di internet (jika provider mendukung pencarian web) atau menyusun sendiri. Hasilnya mengisi form sebagai **draf**, lalu user meninjau dan menyimpan. Sumber disimpan sebagai `web` (dengan `source_url`) atau `ai`.
+2. **Set it myself**: user mengisi topik dan persentase, `source = user`.
+3. Validasi: topik unik (tanpa membedakan huruf besar/kecil), persentase > 0, total tepat 100. Isian topik menyarankan topik yang sudah ada di bank soal.
+
+Soal yang dibuat AI dan setiap simulasi mengikuti blueprint efektif user.
 
 ## 7. Simulasi
 
 ### Pemilihan soal
 
-- Ambil soal dari **bank pribadi** user (`user_exam_pool`), yaitu sekumpulan pointer ke bank bersama.
-- Prioritas: soal yang belum pernah dijawab. Setelah semua terjawab, bank baru boleh diulang.
-- Jika user meminta lebih banyak soal daripada yang tersedia, sistem menambah dari bank bersama dulu, lalu AI.
-- Soal dalam simulasi aktif tidak boleh diambil ulang.
+- **Komposisi persis sesuai blueprint efektif.** Jumlah soal per topik dihitung dari persentase (pembagian sisa terbesar). Topik tidak pernah dicampur.
+- Jika satu topik kekurangan soal terverifikasi, simulasi **tidak dimulai**. Kartu Start menampilkan rincian per topik dan tombol "Prepare N missing questions", yang membuat soal hanya untuk topik yang kurang (+20% cadangan, maksimal 3 putaran).
+- **Pengulangan pintar** di dalam kuota tiap topik, dengan urutan:
+  1. Soal yang belum pernah dijawab.
+  2. Soal yang terakhir dijawab salah.
+  3. Soal yang paling sering salah.
+  4. Soal dengan *streak* benar terpendek (*mastered*, 3 benar berturut-turut, paling akhir).
+  5. Soal yang paling lama tidak dijawab.
+- Setelah semua soal di bank pernah dijawab, soal **diulang terus**. User diberi tahu lewat banner, supaya sadar sedang mengulang dan bisa menambah soal baru jika mau.
+- Soal dalam simulasi aktif lain tidak diambil ulang.
 - Hanya soal `answer_status = verified` dan `status = active` yang masuk.
 
 ### Mode umpan balik
@@ -112,7 +131,9 @@ Simulasi yang ditinggalkan tetap tersimpan dengan status `abandoned`. Soal yang 
 
 - `/riwayat`: daftar simulasi per ujian, dengan tanggal, mode, jumlah soal, skor, dan status.
 - Detail simulasi: jawaban, kunci dan penjelasan dari snapshot, skor per topik.
-- Analisis: skor per topik dan topik lemah berdasarkan riwayat.
+- Analisis (`/ujian/[slug]/analisis`), dihitung dari **setiap jawaban**, termasuk pengulangan:
+  - Akurasi per topik (jumlah benar dan salah).
+  - Daftar soal dengan jumlah benar dan salah, status **Mastered** (3 benar berturut-turut), **Needs review** (jawaban terakhir salah), **Learning**, atau **New**. Bisa difilter dan diurutkan dari yang paling sering salah.
 
 ## 9. Limit dan biaya
 
@@ -163,8 +184,10 @@ question_reports    id, question_id, user_id, reason, created_at,
 user_exam_pool      user_id, exam_id, question_id, added_at,
                     primary key (user_id, exam_id, question_id)
 user_progress       user_id, question_id, answered_count, last_correct,
-                    last_answered_at, primary key (user_id, question_id)
-user_exam_goal      user_id, exam_id, target_score
+                    last_answered_at, correct_count, wrong_count, correct_streak,
+                    primary key (user_id, question_id)
+user_exam_goal      user_id, exam_id, target_score (opsional), exam_size (opsional)
+user_blueprints     user_id, exam_id, topic, percentage   -- blueprint pribadi (bagian 6)
 simulations         id, user_id, exam_id, size, feedback_mode ('instant' | 'end'),
                     status ('in_progress' | 'finished' | 'abandoned'),
                     started_at, finished_at, score, pass_score_snapshot
@@ -180,7 +203,8 @@ user_limits         user_id, ai_calls_per_day, questions_generated_per_day,
                     unlimited, set_by, set_at, note
 ai_usage            user_id, day, calls, questions_generated, tokens,
                     primary key (user_id, day)
-ai_jobs             id, user_id, exam_id, requested, done, status, error, created_at
+ai_jobs             id, user_id, exam_id, kind ('generate' | 'upload' | 'prepare'),
+                    requested, done, status, error, payload, summary, created_at
 ```
 
 ### RLS
