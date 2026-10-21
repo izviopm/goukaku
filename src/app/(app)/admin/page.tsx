@@ -4,7 +4,7 @@ import { Reveal } from "@/components/motion";
 import { Badge, Card, EmptyState, Field, Hero, inputClass, SectionTitle } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
-import { createUser, saveAiSettings, saveCatalog, saveLimits, saveUserLimit } from "./actions";
+import { createUser, saveAiSettings, saveCatalog, saveIdentity, saveLimits, saveUserLimit } from "./actions";
 import { AiSettingsFields } from "./ai-settings-fields";
 import { BlueprintEditor } from "../ujian/[slug]/blueprint-editor";
 
@@ -188,6 +188,38 @@ export default async function AdminPage() {
                       <input id={`ps-${c.id}`} name="pass_score" type="number" min={0} max={100} step="0.1" defaultValue={c.pass_score ?? ""} className={inputClass} />
                     </Field>
                   </ActionForm>
+                  <details className="rounded-lg border p-4">
+                    <summary className="cursor-pointer font-medium">
+                      Exam identity {c.identity ? `(${(c.identity as { full_name: string }).full_name})` : "(not described yet)"}
+                    </summary>
+                    <p className="mt-2 mb-4 text-sm text-muted-foreground">What this exam is. Every AI prompt uses it. Clear the full name to let the next learner describe it again.</p>
+                    <ActionForm action={saveIdentity} submit="Save identity" className="grid gap-3 md:grid-cols-2">
+                      <input type="hidden" name="id" value={c.id} />
+                      {(
+                        [
+                          ["full_name", "Full name"],
+                          ["issuer", "Issuer"],
+                          ["scope", "Module or level"],
+                          ["country", "Country"],
+                        ] as const
+                      ).map(([k, label]) => (
+                        <Field key={k} id={`id-${k}-${c.id}`} label={label}>
+                          <input id={`id-${k}-${c.id}`} name={k} defaultValue={(c.identity as Record<string, string | null> | null)?.[k] ?? ""} className={inputClass} />
+                        </Field>
+                      ))}
+                      <div className="md:col-span-2">
+                        <Field id={`id-summary-${c.id}`} label="Summary">
+                          <textarea
+                            id={`id-summary-${c.id}`}
+                            name="summary"
+                            rows={2}
+                            defaultValue={(c.identity as { summary?: string } | null)?.summary ?? ""}
+                            className={inputClass}
+                          />
+                        </Field>
+                      </div>
+                    </ActionForm>
+                  </details>
                   {examRow && (
                     <details className="rounded-lg border p-4">
                       <summary className="cursor-pointer font-medium">

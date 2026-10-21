@@ -64,10 +64,13 @@ async function getConfig(): Promise<Config> {
   };
 }
 
-/** OpenAI-compatible endpoints have no standard web search tool. */
+// OpenRouter adds web results through its "web" plugin; plain OpenAI-compatible endpoints have no search tool.
+const isOpenRouter = (baseUrl: string | null | undefined) => /(^|\.|\/\/)openrouter\.ai(\/|$)/i.test(baseUrl ?? "");
+
 export async function webSearchAvailable() {
-  const { data } = await createAdminClient().from("ai_settings").select("provider").eq("id", true).maybeSingle();
-  return !!data && data.provider !== "openai_compatible";
+  const { data } = await createAdminClient().from("ai_settings").select("provider, base_url").eq("id", true).maybeSingle();
+  if (!data) return false;
+  return data.provider !== "openai_compatible" || isOpenRouter(data.base_url);
 }
 
 export async function getVerifierModels(): Promise<string[]> {
@@ -125,7 +128,11 @@ async function request(cfg: Config, m: string, system: string, messages: ChatMes
       method: "POST",
       signal,
       headers: { authorization: `Bearer ${cfg.apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify({ model: m, messages: [{ role: "system", content: system }, ...messages] }),
+      body: JSON.stringify({
+        model: m,
+        messages: [{ role: "system", content: system }, ...messages],
+        ...(webSearch && isOpenRouter(cfg.baseUrl) && { plugins: [{ id: "web" }] }),
+      }),
     });
     const json = await readJson(res);
     return json.choices?.[0]?.message?.content ?? "";

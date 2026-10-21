@@ -231,8 +231,8 @@ function CountUp({ to, delay = 0 }: { to: number; delay?: number }) {
 const STEPS = [
   { title: "Create an exam", text: "Type the certification you are studying for. The same name always opens the same shared question bank.", Visual: CreateVisual },
   {
-    title: "Set your goal and blueprint",
-    text: "Choose the question language and your target, then the topic mix. Let the AI suggest it from the official guide, or set it yourself.",
+    title: "Pin down your exam and blueprint",
+    text: "Tell the AI exactly which exam it is, for example CGI module 002. Then set the topic mix: from your syllabus, suggested by AI, or by hand.",
     Visual: BlueprintVisual,
   },
   {

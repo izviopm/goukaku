@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { complete, consumeQuota, extractJson, getVerifierModels, isFatal } from "@/lib/ai";
+import { examContext } from "@/lib/exam-context";
 import { MAX_VERIFIERS, upToN } from "@/lib/fallback";
 import { chunk, LETTERS, normalize, structureError, type QuestionInput } from "@/lib/rules";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -66,11 +67,12 @@ const formatForSolve = (qs: QuestionInput[]) =>
     .join("\n\n");
 
 /** Asks one model to answer questions without seeing any key. */
-export async function solve(userId: string, qs: QuestionInput[], model?: string) {
+export async function solve(userId: string, qs: QuestionInput[], model?: string, examText?: string) {
   await consumeQuota(userId, 1);
   const text = await complete({
     model,
     system:
+      (examText ? `Soal-soal ini untuk ujian sertifikasi: ${examText}. ` : "") +
       "Kamu ahli yang menjawab soal pilihan ganda ujian sertifikasi. Jawab setiap soal dengan satu huruf. " +
       'Balas HANYA JSON array: [{"i": nomor, "answer": "A", "explanation": "alasan singkat"}].',
     messages: [{ role: "user", content: formatForSolve(qs) }],
@@ -91,8 +93,9 @@ export async function verifyQuestions(userId: string, ids: string[]) {
   if (!ids.length) return;
   const db = createAdminClient();
   const models = await getVerifierModels();
-  const { data: qs, error } = await db.from("questions").select("id, body, options, answer").in("id", ids);
+  const { data: qs, error } = await db.from("questions").select("id, exam_id, body, options, answer").in("id", ids);
   if (error) throw new Error(error.message);
+  const examText = qs?.length ? (await examContext(qs[0].exam_id)).text : undefined;
 
   const now = new Date().toISOString();
   const valid: typeof qs = [];
@@ -113,7 +116,7 @@ export async function verifyQuestions(userId: string, ids: string[]) {
   }
 
   for (const batch of chunk(valid)) {
-    const { ok, failed } = await upToN(models, MAX_VERIFIERS, (m) => solve(userId, batch, m), isFatal);
+    const { ok, failed } = await upToN(models, MAX_VERIFIERS, (m) => solve(userId, batch, m, examText), isFatal);
     if (failed.length) console.warn("Verifier fallback:", failed);
     for (const [i, q] of batch.entries()) {
       const solvers = ok.map(({ model, value }) => ({ model, ...value[i] }));

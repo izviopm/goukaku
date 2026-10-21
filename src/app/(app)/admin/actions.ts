@@ -108,6 +108,22 @@ export async function saveUserLimit(_p: AdminState, form: FormData): Promise<Adm
   return done("User limits saved");
 }
 
+/** Admin: correct or clear what an exam is. Clearing it makes the next learner describe it again. */
+export async function saveIdentity(_p: AdminState, form: FormData): Promise<AdminState> {
+  await requireAdmin();
+  const v = (k: string) => String(form.get(k) ?? "").trim() || null;
+  const fullName = v("full_name");
+  const summary = v("summary");
+  if (fullName && !summary) return { error: "Add a short summary of what the exam covers" };
+  const identity = fullName ? { full_name: fullName, issuer: v("issuer"), scope: v("scope"), country: v("country"), summary } : null;
+  const { error } = await createAdminClient()
+    .from("exam_catalog")
+    .update({ identity, identity_set_by: null })
+    .eq("id", String(form.get("id")));
+  if (error) return { error: error.message };
+  return done(identity ? "Exam identity saved" : "Exam identity cleared");
+}
+
 export async function saveCatalog(_p: AdminState, form: FormData): Promise<AdminState> {
   const { supabase } = await requireAdmin();
   const lang = String(form.get("language") ?? "");

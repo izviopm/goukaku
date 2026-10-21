@@ -2,11 +2,11 @@
 
 import { useRef, useState, useTransition } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { CircleCheck, ExternalLink, PencilLine, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { CircleCheck, ExternalLink, FileText, PencilLine, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { easeOut } from "@/components/motion";
 import { AiAvatar, Badge, Button, ErrorText, inputClass } from "@/components/ui";
 import type { BlueprintRow } from "@/lib/rules";
-import { resetBlueprint, saveBlueprint, saveDefaultBlueprint, suggestBlueprint, type Source } from "./blueprint-actions";
+import { blueprintFromSyllabus, resetBlueprint, saveBlueprint, saveDefaultBlueprint, suggestBlueprint, type Source } from "./blueprint-actions";
 
 type Row = BlueprintRow & { key: number };
 type Props = {
@@ -24,6 +24,7 @@ export function BlueprintEditor({ examId, initial, mode = "user", personal = fal
   const [rows, setRows] = useState<Row[]>(() => initial.map((r, i) => ({ ...r, key: i })));
   const nextKey = useRef(initial.length);
   const [editing, setEditing] = useState(initial.length > 0 || mode === "admin");
+  const [syllabusOpen, setSyllabusOpen] = useState(false);
   const [source, setSource] = useState<Source>("user");
   const [url, setUrl] = useState<string | null>(sourceUrl);
   const [error, setError] = useState("");
@@ -47,6 +48,21 @@ export function BlueprintEditor({ examId, initial, mode = "user", personal = fal
       setSource(res.source ?? "ai");
       setUrl(res.sourceUrl ?? null);
       setMessage(res.source === "web" ? "Draft from the official exam guide. Review it, then save." : "Draft suggested by AI. Review it, then save.");
+    });
+  }
+
+  function readSyllabus(form: FormData) {
+    setError("");
+    setMessage("");
+    startSuggest(async () => {
+      const res = await blueprintFromSyllabus(examId, form);
+      if (res.error || !res.rows) return setError(res.error ?? "No topics found");
+      setRows(res.rows.map((r) => ({ ...r, key: nextKey.current++ })));
+      setSource("user");
+      setUrl(null);
+      setSyllabusOpen(false);
+      setEditing(true);
+      setMessage("Draft built from your syllabus. Review it, then save.");
     });
   }
 
@@ -90,8 +106,33 @@ export function BlueprintEditor({ examId, initial, mode = "user", personal = fal
         </div>
       )}
 
-      {!editing && !thinking ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+      {syllabusOpen && !thinking ? (
+        <form action={readSyllabus} className="flex flex-col gap-3 rounded-xl border bg-muted/40 p-4">
+          <h3 className="font-semibold">Use my syllabus</h3>
+          <p className="text-sm text-muted-foreground">Paste the official syllabus or exam guide, or upload it. The AI turns its topics and weights into a draft.</p>
+          <div className="flex flex-col gap-1">
+            <label htmlFor={`syllabus-text-${mode}`} className="text-sm font-medium">
+              Syllabus text
+            </label>
+            <textarea id={`syllabus-text-${mode}`} name="text" rows={5} className={inputClass} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor={`syllabus-file-${mode}`} className="text-sm font-medium">
+              Or a file (PDF, DOCX, TXT)
+            </label>
+            <input id={`syllabus-file-${mode}`} name="file" type="file" accept=".pdf,.docx,.txt" className={inputClass} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit">
+              <Sparkles aria-hidden="true" className="size-4" /> Read syllabus
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setSyllabusOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : !editing && !thinking ? (
+        <div className="grid gap-3 lg:grid-cols-3">
           <button
             type="button"
             onClick={suggest}
@@ -117,6 +158,17 @@ export function BlueprintEditor({ examId, initial, mode = "user", personal = fal
             <span className="font-semibold">Set it myself</span>
             <span className="text-sm text-muted-foreground">Type the topics and how much of the exam each one covers.</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setSyllabusOpen(true)}
+            className="flex cursor-pointer flex-col items-start gap-2 rounded-xl border bg-card p-4 text-left transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <span className="inline-flex size-8 items-center justify-center rounded-full bg-accent-soft text-accent-foreground">
+              <FileText aria-hidden="true" className="size-4" />
+            </span>
+            <span className="font-semibold">Use my syllabus</span>
+            <span className="text-sm text-muted-foreground">Paste or upload the official syllabus. Most accurate for local certifications.</span>
+          </button>
         </div>
       ) : (
         <>
@@ -128,7 +180,7 @@ export function BlueprintEditor({ examId, initial, mode = "user", personal = fal
                 exit={{ opacity: 0, transition: { duration: 0.12 } }}
                 className="flex items-center gap-3 rounded-xl bg-ai-soft p-3 text-sm font-medium text-ai"
               >
-                <AiAvatar size="sm" thinking /> AI is looking for the exam blueprint…
+                <AiAvatar size="sm" thinking /> AI is working on your blueprint…
               </motion.p>
             )}
           </AnimatePresence>

@@ -26,6 +26,8 @@ import type { Readiness } from "./actions";
 import { AddQuestions } from "./add-questions";
 import { BlueprintEditor } from "./blueprint-editor";
 import { Chat } from "./chat";
+import type { ExamIdentity } from "@/lib/exam-context";
+import { ExamIdentityChat, IdentityCard } from "./exam-identity";
 import { GoalForm } from "./forms";
 import { StartPractice } from "./start-practice";
 
@@ -60,7 +62,8 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
   const verified = readiness.reduce((s, r) => s + r.available, 0);
   const unanswered = readiness.reduce((s, r) => s + r.unanswered, 0);
   const minimum = Math.min(MIN_TO_PRACTICE, goal?.exam_size ?? MIN_TO_PRACTICE);
-  const goalDone = !!goal && !!exam.language;
+  const identity = exam.identity as ExamIdentity | null;
+  const goalDone = !!identity && !!goal && !!exam.language;
   const blueprintDone = bp.length > 0;
   const questionsDone = verified >= minimum;
   const practice = goalDone && blueprintDone && questionsDone;
@@ -68,6 +71,17 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
   const topicSuggestions = [...new Set([...(defaults ?? []).map((d) => d.topic), ...(topicRows ?? []).map((t) => t.topic as string)])].sort();
   const passScore = goal?.target_score ?? exam.pass_score;
 
+  const identityBlock = identity ? (
+    <div className="flex flex-col gap-2">
+      <IdentityCard identity={identity} />
+      <p className="text-xs text-muted-foreground">
+        Shared by everyone studying &quot;{exam.display_name}&quot;. Preparing for a different module or level? Create a separate exam for it, for example &quot;
+        {exam.display_name} 003&quot;.
+      </p>
+    </div>
+  ) : (
+    <ExamIdentityChat examId={exam.examId} examName={exam.display_name} />
+  );
   const goalForm = (
     <GoalForm
       examId={exam.examId}
@@ -112,8 +126,22 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
           {badges}
         </Hero>
         <ol className="flex flex-col gap-4">
-          <Step n={1} title="Your goal" icon={Target} done={goalDone} current={current === 1} summary={goalDone ? `${exam.language === "en" ? "English" : "Indonesian"} questions${goal?.target_score != null ? ` · target ${goal.target_score}` : ""}${goal?.exam_size ? ` · ${goal.exam_size}-question exam` : ""}` : undefined}>
-            {goalForm}
+          <Step
+            n={1}
+            title="Your exam and goal"
+            icon={Target}
+            done={goalDone}
+            current={current === 1}
+            summary={
+              goalDone
+                ? `${identity?.full_name}${identity?.scope ? ` · ${identity.scope}` : ""} · ${exam.language === "en" ? "English" : "Indonesian"}${goal?.target_score != null ? ` · target ${goal.target_score}` : ""}`
+                : undefined
+            }
+          >
+            <div className="flex flex-col gap-6">
+              {identityBlock}
+              {identity && goalForm}
+            </div>
           </Step>
           <Step n={2} title="Blueprint" icon={ListTree} done={blueprintDone} current={current === 2} locked={current < 2} summary={blueprintDone ? `${bp.length} topics${bp.some((b) => b.personal) ? " · personal" : ""}` : undefined}>
             <p className="-mt-1 mb-4 text-sm text-muted-foreground">Which topics the exam covers and how much of it each one is. Every practice run follows this mix exactly.</p>
@@ -252,9 +280,12 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
         <div className="flex flex-col gap-3">
           <details className="rounded-xl border">
             <summary className="flex min-h-12 cursor-pointer items-center gap-3 px-4 font-medium">
-              <Target aria-hidden="true" className="size-4 text-primary" /> Goal
+              <Target aria-hidden="true" className="size-4 text-primary" /> Exam and goal
             </summary>
-            <div className="border-t p-4">{goalForm}</div>
+            <div className="flex flex-col gap-6 border-t p-4">
+              {identityBlock}
+              {goalForm}
+            </div>
           </details>
           <details className="rounded-xl border">
             <summary className="flex min-h-12 cursor-pointer items-center gap-3 px-4 font-medium">

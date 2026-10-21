@@ -3,6 +3,7 @@
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getUser } from "@/lib/auth";
+import { examContext } from "@/lib/exam-context";
 import { fileToText, MAX_TEXT } from "@/lib/extract";
 import { runJob } from "@/lib/generate";
 import { saveQuestions, verifyQuestions } from "@/lib/questions";
@@ -23,12 +24,12 @@ async function startJob(userId: string, examId: string, kind: "generate" | "uplo
 }
 
 async function setupError(userId: string, examId: string) {
-  const db = createAdminClient();
-  const [{ data: exam }, { data: bp }] = await Promise.all([
-    db.from("exams").select("exam_catalog(language)").eq("id", examId).single(),
-    db.rpc("effective_blueprint_for", { p_user: userId, p_exam_id: examId }),
+  const [ctx, { data: bp }] = await Promise.all([
+    examContext(examId),
+    createAdminClient().rpc("effective_blueprint_for", { p_user: userId, p_exam_id: examId }),
   ]);
-  if (!(exam?.exam_catalog as unknown as { language: string | null } | null)?.language) return "Set the question language first.";
+  if (!ctx.identity) return "Describe this exam in step 1 first, so the AI writes questions for the right certification.";
+  if (!ctx.language) return "Set the question language first.";
   if (!bp?.length) return "Set a blueprint first, so new questions follow your topic mix.";
   return null;
 }

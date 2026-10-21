@@ -17,7 +17,10 @@ Membantu user belajar untuk ujian sertifikasi lewat simulasi yang menyerupai uji
 2. **Dashboard**: daftar ujian user dan tombol buat ujian baru.
 3. **Halaman ujian** (`/ujian/[slug]`), dua mode:
    - **Setup** (langkah bertahap, langkah berikutnya terkunci sampai yang sebelumnya selesai):
-     1. **Goal**: bahasa soal (dibagi per ujian, diisi sekali), target skor (opsional), jumlah soal ujian asli (opsional).
+     1. **Ujian dan goal**:
+        - **Identitas ujian**: user menjelaskan ujiannya (misalnya "CGI (Certified General Insurance) modul 002"). AI terus bertanya sampai tahu nama resmi, penyelenggara, modul atau level, dan negara, lalu menampilkan kartu ringkasan untuk dikonfirmasi.
+        - Identitas ini dibagi per ujian: diisi user pertama, lalu hanya admin yang bisa mengubah atau mengosongkannya. Ringkasannya dikirim ke **setiap prompt AI** (blueprint, generate, ekstraksi, verifikasi, chat). Modul atau level lain dibuat sebagai ujian terpisah, misalnya "CGI 003".
+        - Lalu bahasa soal (dibagi per ujian, diisi sekali), target skor (opsional), dan jumlah soal ujian asli (opsional).
      2. **Blueprint** (bagian 6).
      3. **Tambah soal** (bagian 5).
    - **Practice**: terbuka jika goal tersimpan, ada blueprint, dan minimal 10 soal terverifikasi (atau sejumlah soal ujian asli jika lebih kecil). Berisi Start, ringkasan topik, tambah soal, dan pengaturan ujian.
@@ -87,6 +90,8 @@ Cara mengisi:
 
 1. **Suggest with AI**: AI mencari panduan resmi di internet (jika provider mendukung pencarian web) atau menyusun sendiri. Hasilnya mengisi form sebagai **draf**, lalu user meninjau dan menyimpan. Sumber disimpan sebagai `web` (dengan `source_url`) atau `ai`.
 2. **Set it myself**: user mengisi topik dan persentase, `source = user`.
+2a. **Use my syllabus**: user menempel teks atau mengunggah silabus/panduan ujian (PDF/DOCX/TXT). AI menyusun topik dan persentase dari dokumen itu (memakai bobot yang tertulis jika ada) sebagai draf, `source = user`. Ini paling akurat untuk sertifikasi lokal.
+2b. Pencarian web untuk "Suggest with AI" tersedia di provider OpenAI, Anthropic, Gemini, dan OpenRouter (lewat plugin `web`). Provider OpenAI-compatible lain tidak punya pencarian web bawaan.
 3. Validasi: topik unik (tanpa membedakan huruf besar/kecil), persentase > 0, total tepat 100. Isian topik menyarankan topik yang sudah ada di bank soal.
 
 Soal yang dibuat AI dan setiap simulasi mengikuti blueprint efektif user.
@@ -167,7 +172,8 @@ Nilai kelulusan yang disimpan di simulasi adalah `pass_score_snapshot`.
 ```text
 profiles            id (auth.users), role ('admin' | 'user'), created_at
 exam_catalog        id, slug unique, display_name, aliases text[], language,
-                    pass_score, pass_score_source, pass_score_url
+                    pass_score, pass_score_source, pass_score_url,
+                    identity jsonb {full_name, issuer, scope, country, summary}, identity_set_by
 exams               id, catalog_id unique, created_by, created_at
 user_exams          user_id, exam_id, created_at   -- ujian yang tampil di dashboard user
 exam_blueprints     id, exam_id, topic, percentage,

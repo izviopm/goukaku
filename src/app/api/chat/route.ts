@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { AIError, complete, consumeQuota, webSearchAvailable, type ChatMessage } from "@/lib/ai";
 import { getUser } from "@/lib/auth";
+import { describeExam, type ExamIdentity } from "@/lib/exam-context";
 import { runJob } from "@/lib/generate";
 import { normalizeBlueprint } from "@/lib/rules";
 import { saveBlueprint } from "@/app/(app)/ujian/[slug]/blueprint-actions";
@@ -85,6 +86,8 @@ export async function POST(req: Request) {
       } else if (a.type === "set_target") {
         await db.from("user_exam_goal").upsert({ user_id: user.id, exam_id: examId, target_score: a.score });
         notes.push(`Personal target saved: ${a.score}.`);
+      } else if (a.type === "generate_questions" && !catalog.identity) {
+        notes.push("Describe this exam in step 1 first, so new questions match the right certification.");
       } else if (a.type === "generate_questions") {
         const { data: job, error } = await db
           .from("ai_jobs")
@@ -125,6 +128,7 @@ function systemPrompt(
     ? bp.map((b) => `- ${b.topic}: ${b.percentage}%${b.personal ? " (blueprint pribadi user)" : ""}`).join("\n")
     : "(belum ada)";
   return `Kamu asisten belajar di aplikasi Goukaku untuk ujian "${c.display_name}". Jawab ringkas dalam bahasa yang dipakai user.
+Ujian yang dimaksud: ${describeExam(String(c.display_name), (c.identity as ExamIdentity | null) ?? null)}. Semua jawaban, tips, dan soal harus sesuai sertifikasi ini, bukan bidang lain dengan singkatan yang sama.
 
 Kondisi ujian saat ini:
 - Bahasa soal: ${c.language ?? "BELUM ditentukan"}
