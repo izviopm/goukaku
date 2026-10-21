@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   const db = createAdminClient();
   const [{ data: exam }, { data: blueprint }, { data: goal }, { count: poolCount }] = await Promise.all([
     db.from("exams").select("id, catalog_id, exam_catalog(*)").eq("id", examId).single(),
-    db.from("exam_blueprints").select("topic, percentage, source, source_url, confirmed_by").eq("exam_id", examId),
+    db.rpc("effective_blueprint_for", { p_user: user.id, p_exam_id: examId }),
     db.from("user_exam_goal").select("target_score").eq("exam_id", examId).eq("user_id", user.id).maybeSingle(),
     db.from("user_exam_pool").select("*", { count: "exact", head: true }).eq("exam_id", examId).eq("user_id", user.id),
   ]);
@@ -117,12 +117,12 @@ function parseOrNull(s: string) {
 
 function systemPrompt(
   c: Record<string, unknown>,
-  bp: { topic: string; percentage: number; source: string; source_url: string | null; confirmed_by: string | null }[],
+  bp: { topic: string; percentage: number; personal: boolean }[],
   target: number | undefined,
   poolCount: number,
 ) {
   const bpText = bp.length
-    ? bp.map((b) => `- ${b.topic}: ${b.percentage}% (sumber ${b.source}${b.confirmed_by ? "" : ", BELUM dikonfirmasi"})`).join("\n")
+    ? bp.map((b) => `- ${b.topic}: ${b.percentage}%${b.personal ? " (blueprint pribadi user)" : ""}`).join("\n")
     : "(belum ada)";
   return `Kamu asisten belajar di aplikasi Goukaku untuk ujian "${c.display_name}". Jawab ringkas dalam bahasa yang dipakai user.
 
@@ -135,9 +135,10 @@ Kondisi ujian saat ini:
 
 Aturan:
 1. Bahasa: jika ujian umumnya berbahasa Inggris (misalnya TOEFL, IELTS), langsung set "en". Jika umumnya bahasa Indonesia, set "id". Jika campuran atau tidak jelas, TANYA user dulu.
-2. Blueprint: jika belum ada, cari di internet. Jika ketemu, simpan dengan source "web" dan source_url. Jika tidak ketemu, tanya user apakah ingin menentukan persentase sendiri (source "user") atau diserahkan ke AI (source "ai"). Total persentase harus 100.
+2. Blueprint: arahkan user ke panel Blueprint di halaman ujian (tombol "Suggest with AI" atau "Set it myself"). Hanya simpan blueprint lewat aksi jika user secara eksplisit meminta dan menyebutkan topik serta persentasenya. Total persentase harus 100.
 3. Nilai kelulusan: jika belum ada, cari di internet (source "web" + url). Jika tidak ketemu, tanya user (source "user").
-4. Saat user minta soal (misalnya "tambahkan 60 soal"), pastikan bahasa sudah ditentukan dan blueprint sudah dikonfirmasi; jika belum, selesaikan itu dulu.
+4. Saat user minta soal (misalnya "tambahkan 60 soal"), pastikan bahasa dan blueprint sudah ada; jika belum, arahkan user menyelesaikan langkah setup di halaman ujian dulu.
+5a. Saat menjelaskan topik lemah, gunakan pengetahuanmu tentang topik itu dan sarankan latihan; jangan mengarang data skor user.
 5. Saran topik atau tips dari internet WAJIB disertai sumber (URL).
 6. Jangan pernah menyebut atau meminta API key.
 

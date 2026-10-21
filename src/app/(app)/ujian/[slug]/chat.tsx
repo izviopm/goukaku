@@ -2,15 +2,15 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CircleCheck, SendHorizontal } from "lucide-react";
+import { CircleCheck, SendHorizontal, Sparkles, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { JobProgress } from "@/components/job-progress";
 import { easeOut, spring } from "@/components/motion";
-import { AiAvatar, Button, ErrorText, inputClass, ProgressBar } from "@/components/ui";
+import { AiAvatar, Button, ErrorText, inputClass } from "@/components/ui";
 
 type Msg = { role: "user" | "assistant"; content: string };
-type Job = { requested: number; done: number; status: string; error: string | null };
 
-const SUGGESTIONS = ["Find the exam blueprint", "What is the passing score?", "Add 20 practice questions", "Give me study tips"];
+const SUGGESTIONS = ["What is the passing score?", "Give me study tips", "Explain my weakest topic", "Add 20 practice questions"];
 
 /** Turns bare URLs in AI replies into links so cited sources are clickable. */
 function Linkify({ text }: { text: string }) {
@@ -33,29 +33,26 @@ export function Chat({ examId }: { examId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
-  const [job, setJob] = useState<Job | null>(null);
+  const [open, setOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const launcherRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, busy]);
+  }, [messages, busy, open]);
 
-  // Poll the generation job until it finishes, then refresh the page counts.
+  // Focus the message box when the panel opens.
   useEffect(() => {
-    if (!jobId) return;
-    const t = setInterval(async () => {
-      const res = await fetch(`/api/jobs/${jobId}`);
-      if (!res.ok) return;
-      const j: Job = await res.json();
-      setJob(j);
-      if (j.status === "done" || j.status === "failed") {
-        clearInterval(t);
-        router.refresh();
-      }
-    }, 3000);
-    return () => clearInterval(t);
-  }, [jobId, router]);
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  function close() {
+    setOpen(false);
+    // Return focus to the launcher once it is back on screen.
+    setTimeout(() => launcherRef.current?.focus(), 200);
+  }
 
   async function send(text: string) {
     text = text.trim();
@@ -85,18 +82,54 @@ export function Chat({ examId }: { examId: string }) {
   }
 
   return (
-    <section aria-labelledby="ai-title" className="overflow-hidden rounded-2xl border border-ai-border bg-card shadow-sm">
+    <>
+      <AnimatePresence>
+        {!open && (
+          <motion.button
+            ref={launcherRef}
+            type="button"
+            onClick={() => setOpen(true)}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.12 } }}
+            transition={spring}
+            whileTap={{ scale: 0.94 }}
+            aria-label="Open AI assistant"
+            className="fixed right-4 bottom-4 z-30 inline-flex min-h-14 cursor-pointer items-center gap-2 rounded-full bg-linear-to-br from-ai to-primary py-2 pr-5 pl-2 font-semibold text-white shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:right-6 sm:bottom-6"
+          >
+            <span className="inline-flex size-10 items-center justify-center rounded-full bg-white/15">
+              <Sparkles aria-hidden="true" className={`size-5 ${busy ? "motion-safe:animate-pulse" : ""}`} />
+            </span>
+            Ask AI
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {open && (
+          <motion.section
+            role="dialog"
+            aria-labelledby="ai-title"
+            onKeyDown={(e) => e.key === "Escape" && close()}
+            initial={{ opacity: 0, x: 32 }}
+            animate={{ opacity: 1, x: 0, transition: spring }}
+            exit={{ opacity: 0, x: 32, transition: { duration: 0.15 } }}
+            className="fixed inset-0 z-40 flex flex-col overflow-hidden border-ai-border bg-card shadow-sm sm:inset-y-4 sm:right-4 sm:left-auto sm:w-md sm:rounded-2xl sm:border"
+          >
       <header className="flex items-center gap-3 bg-linear-to-r from-ai-soft to-primary-soft px-4 py-4 sm:px-6">
         <AiAvatar thinking={busy} />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 id="ai-title" className="text-lg font-semibold">
             AI assistant
           </h2>
-          <p className="text-sm text-muted-foreground">Questions, blueprints, passing scores, and study tips.</p>
+          <p className="text-sm text-muted-foreground">Exam tips, passing scores, and more questions.</p>
         </div>
+        <Button type="button" variant="ghost" className="px-2" aria-label="Close AI assistant" onClick={close}>
+          <X aria-hidden="true" className="size-5" />
+        </Button>
       </header>
 
-      <div ref={scrollRef} className="flex max-h-96 min-h-64 flex-col gap-4 overflow-y-auto px-4 py-6 sm:max-h-128 sm:px-6" aria-live="polite">
+      <div ref={scrollRef} className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-6 sm:px-6" aria-live="polite">
         {messages.length === 0 && !busy && (
           <div className="m-auto flex flex-col items-center gap-4 text-center">
             <AiAvatar />
@@ -181,18 +214,7 @@ export function Chat({ examId }: { examId: string }) {
             {n}
           </p>
         ))}
-        {job && (
-          <div className="flex flex-col gap-2 rounded-lg border border-ai-border bg-ai-soft/60 p-3 text-sm">
-            <p className={job.status === "failed" ? "text-destructive" : "font-medium text-ai"}>
-              {job.status === "failed"
-                ? `Question generation stopped at ${job.done}/${job.requested}: ${job.error}`
-                : job.status === "done"
-                  ? `Done: ${job.done}/${job.requested} questions added to your bank. New questions are used once verified.`
-                  : `Preparing questions… ${job.done}/${job.requested}`}
-            </p>
-            <ProgressBar value={(100 * job.done) / job.requested} tone="ai" />
-          </div>
-        )}
+        {jobId && <JobProgress key={jobId} jobId={jobId} />}
         {error && <ErrorText>{error}</ErrorText>}
       </div>
 
@@ -208,6 +230,7 @@ export function Chat({ examId }: { examId: string }) {
             Message
           </label>
           <input
+            ref={inputRef}
             id="chat-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -221,6 +244,9 @@ export function Chat({ examId }: { examId: string }) {
           <SendHorizontal aria-hidden="true" className="size-5" />
         </Button>
       </form>
-    </section>
+          </motion.section>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
