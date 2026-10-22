@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { animate, AnimatePresence, motion, useInView, useMotionValue, useReducedMotion, useTransform } from "motion/react";
-import { ArrowDown, CircleCheck, FileSpreadsheet, FileText, Library, Pause, Play, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowDown, CircleCheck, FileSpreadsheet, FileText, Library, Pause, PencilLine, Play, RotateCcw, ShieldCheck, Sparkles } from "lucide-react";
 import { AnimatedBar, easeOut, spring } from "@/components/motion";
 import { AiAvatar } from "@/components/ui";
 
@@ -41,26 +41,61 @@ function CreateVisual() {
   );
 }
 
+function IdentityVisual() {
+  const turns = [
+    { me: true, text: "CGI module 002" },
+    { me: false, text: "Certified General Insurance from AAUI? Which topic is module 002?" },
+    { me: true, text: "Yes, AAUI. Module 002 is Property Insurance." },
+  ];
+  return (
+    <div className="flex flex-col gap-2">
+      {turns.map((t, i) =>
+        t.me ? (
+          <motion.p key={i} {...appear(0.2 + i * 0.45)} className="max-w-4/5 self-end rounded-2xl rounded-br-md bg-primary px-3 py-1.5 text-sm text-white">
+            {t.text}
+          </motion.p>
+        ) : (
+          <motion.div key={i} {...appear(0.2 + i * 0.45)} className="flex max-w-11/12 items-start gap-2 self-start">
+            <AiAvatar size="sm" />
+            <p className="rounded-2xl rounded-tl-md bg-ai-soft px-3 py-1.5 text-sm">{t.text}</p>
+          </motion.div>
+        ),
+      )}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ ...spring, delay: 1.7 }}
+        className="mt-1 flex items-start gap-2 rounded-xl border border-ai-border bg-ai-soft/50 p-2.5 text-sm"
+      >
+        <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-success" />
+        <span>
+          <span className="font-semibold">Certified General Insurance</span> · AAUI · Module 002 Property Insurance · Indonesia
+        </span>
+      </motion.div>
+    </div>
+  );
+}
+
 function BlueprintVisual() {
   const rows = [
-    { topic: "Security", pct: 40 },
-    { topic: "Networking", pct: 35 },
-    { topic: "Cloud basics", pct: 25 },
+    { topic: "Property risks", pct: 40 },
+    { topic: "Policy wording", pct: 35 },
+    { topic: "Claims handling", pct: 25 },
+  ];
+  const sources = [
+    { icon: FileText, label: "From your syllabus", cls: "bg-accent-soft text-accent-foreground ring-2 ring-accent" },
+    { icon: Sparkles, label: "Suggest with AI", cls: "bg-ai-soft text-ai" },
+    { icon: PencilLine, label: "By hand", cls: "bg-primary-soft text-primary" },
   ];
   return (
     <div className="flex flex-col gap-3">
-      <motion.p {...appear(0.1)} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        <span>
-          <span className="font-medium">Target</span> 80
-        </span>
-        <span className="text-muted-foreground">·</span>
-        <span>
-          <span className="font-medium">Language</span> English
-        </span>
-      </motion.p>
-      <motion.span {...appear(0.4)} className="inline-flex items-center gap-1.5 self-start rounded-full bg-ai-soft px-3 py-1 text-xs font-medium text-ai">
-        <Sparkles aria-hidden="true" className="size-3.5" /> Suggested by AI from the official guide
-      </motion.span>
+      <div className="flex flex-wrap gap-1.5">
+        {sources.map(({ icon: Icon, label, cls }, i) => (
+          <motion.span key={label} {...appear(0.1 + i * 0.15)} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${cls}`}>
+            <Icon aria-hidden="true" className="size-3.5" /> {label}
+          </motion.span>
+        ))}
+      </div>
       {rows.map((r, i) => (
         <motion.div key={r.topic} {...appear(0.7 + i * 0.2)} className="flex flex-col gap-1 text-sm">
           <div className="flex justify-between">
@@ -231,8 +266,13 @@ function CountUp({ to, delay = 0 }: { to: number; delay?: number }) {
 const STEPS = [
   { title: "Create an exam", text: "Type the certification you are studying for. The same name always opens the same shared question bank.", Visual: CreateVisual },
   {
-    title: "Pin down your exam and blueprint",
-    text: "Tell the AI exactly which exam it is, for example CGI module 002. Then set the topic mix: from your syllabus, suggested by AI, or by hand.",
+    title: "Pin down your exam",
+    text: "Tell the AI which exam you are preparing for. It asks until it knows the exact certification, issuer, and module, so every question fits.",
+    Visual: IdentityVisual,
+  },
+  {
+    title: "Set your blueprint",
+    text: "Choose the topic mix: read it from your syllabus, let the AI suggest it, or set it yourself. Every practice run follows it exactly.",
     Visual: BlueprintVisual,
   },
   {
@@ -305,7 +345,7 @@ export function HowItWorks() {
         )}
       </div>
 
-      <ol className="grid grid-cols-6 gap-1.5 sm:gap-2">
+      <ol className="grid grid-cols-7 gap-1.5 sm:gap-2">
         {STEPS.map((s, i) => (
           <li key={s.title}>
             <button
