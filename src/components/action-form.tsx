@@ -2,7 +2,7 @@
 
 import { startTransition, useActionState, useEffect, useRef, type FormEvent, type ReactNode } from "react";
 import { CircleCheck } from "lucide-react";
-import { Button, ErrorText } from "@/components/ui";
+import { Button, ErrorText, type Variant } from "@/components/ui";
 
 type State = { error?: string; message?: string };
 
@@ -19,12 +19,16 @@ export function ActionForm({
   children,
   className = "flex flex-col gap-4",
   resetOnSuccess = false,
+  variant,
+  pendingLabel = "Saving…",
 }: {
   action: (prev: State, form: FormData) => Promise<State>;
   submit: string;
   children: ReactNode;
   className?: string;
   resetOnSuccess?: boolean;
+  variant?: Variant;
+  pendingLabel?: string;
 }) {
   const [state, formAction, pending] = useActionState<State, FormData>(action, {});
   const formRef = useRef<HTMLFormElement>(null);
@@ -43,8 +47,8 @@ export function ActionForm({
     <form ref={formRef} onSubmit={onSubmit} className={className}>
       {children}
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : submit}
+        <Button type="submit" variant={variant} disabled={pending}>
+          {pending ? pendingLabel : submit}
         </Button>
         <div aria-live="polite" className="text-sm">
           {state.message && (

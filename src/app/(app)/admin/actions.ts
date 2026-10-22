@@ -164,3 +164,13 @@ export async function saveCatalog(_p: AdminState, form: FormData): Promise<Admin
   if (error) return { error: error.message };
   return done("Catalog saved");
 }
+
+/** Admin: delete an exam and everything under it (questions, blueprints, every learner's progress and history). */
+export async function deleteExam(_p: AdminState, form: FormData): Promise<AdminState> {
+  await requireAdmin();
+  if (String(form.get("confirm") ?? "").trim() !== String(form.get("slug"))) return { error: "Type the exam code exactly to confirm" };
+  // exam_catalog cascades to exams and every table that references them.
+  const { error } = await createAdminClient().from("exam_catalog").delete().eq("id", String(form.get("id")));
+  if (error) return { error: error.message };
+  return done("Exam deleted");
+}

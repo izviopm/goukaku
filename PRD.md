@@ -33,6 +33,7 @@ Membantu user belajar untuk ujian sertifikasi lewat simulasi yang menyerupai uji
 
 - User memasukkan nama ujian. Sistem memetakan nama ke `exam_catalog` lewat `slug` dan `aliases`, sehingga "CGI" dan "cgi" menuju ujian yang sama.
 - Jika belum ada di katalog, ujian baru dibuat dan dicatat. Tidak ada approval admin.
+- Admin bisa menghapus ujian dari katalog (misalnya salah ketik nama). Penghapusan bersifat permanen dan ikut menghapus soal, blueprint, serta progres dan riwayat semua user untuk ujian itu, jadi admin harus mengetik kode ujian untuk konfirmasi.
 
 ## 4. Chat AI
 

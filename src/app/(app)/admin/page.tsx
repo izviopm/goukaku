@@ -5,7 +5,7 @@ import { Reveal } from "@/components/motion";
 import { Badge, Card, EmptyState, Field, Hero, inputClass, SectionTitle } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
-import { createUser, resetUserPassword, saveAiSettings, saveCatalog, saveIdentity, saveLimits, saveUserLimit } from "./actions";
+import { createUser, deleteExam, resetUserPassword, saveAiSettings, saveCatalog, saveIdentity, saveLimits, saveUserLimit } from "./actions";
 import { AiSettingsFields } from "./ai-settings-fields";
 import { BlueprintEditor } from "../ujian/[slug]/blueprint-editor";
 
@@ -278,6 +278,19 @@ export default async function AdminPage() {
                       />
                     </details>
                   )}
+                  <details className="rounded-lg border border-destructive/30 p-4">
+                    <summary className="cursor-pointer font-medium text-destructive">Delete exam</summary>
+                    <p className="mt-2 mb-4 text-sm text-muted-foreground">
+                      Permanently removes this exam with its questions, blueprints, and every learner&apos;s practice history. This cannot be undone.
+                    </p>
+                    <ActionForm action={deleteExam} submit="Delete exam" variant="destructive" pendingLabel="Deleting…" className="flex flex-col gap-3">
+                      <input type="hidden" name="id" value={c.id} />
+                      <input type="hidden" name="slug" value={c.slug} />
+                      <Field id={`del-${c.id}`} label={`Type ${c.slug} to confirm`}>
+                        <input id={`del-${c.id}`} name="confirm" autoComplete="off" required className={inputClass} />
+                      </Field>
+                    </ActionForm>
+                  </details>
                 </li>
                 );
               })}
