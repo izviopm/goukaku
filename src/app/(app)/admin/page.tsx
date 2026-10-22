@@ -1,10 +1,11 @@
-import { BookMarked, Flag, Gauge, Sparkles, UserPlus, Users } from "lucide-react";
+import { BookMarked, Flag, Gauge, KeyRound, Sparkles, UserPlus, Users } from "lucide-react";
 import { ActionForm } from "@/components/action-form";
+import { Avatar } from "@/components/avatar";
 import { Reveal } from "@/components/motion";
 import { Badge, Card, EmptyState, Field, Hero, inputClass, SectionTitle } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
-import { createUser, saveAiSettings, saveCatalog, saveIdentity, saveLimits, saveUserLimit } from "./actions";
+import { createUser, resetUserPassword, saveAiSettings, saveCatalog, saveIdentity, saveLimits, saveUserLimit } from "./actions";
 import { AiSettingsFields } from "./ai-settings-fields";
 import { BlueprintEditor } from "../ujian/[slug]/blueprint-editor";
 
@@ -16,7 +17,7 @@ export default async function AdminPage() {
     await Promise.all([
       supabase.from("ai_settings").select("provider, model, base_url, api_key_secret_id").eq("id", true).maybeSingle(),
       supabase.from("app_settings").select("key, value"),
-      supabase.from("profiles").select("id, role, created_at").order("created_at"),
+      supabase.from("profiles").select("id, role, full_name, gender, avatar_path, created_at").order("created_at"),
       supabase.from("user_limits").select("*"),
       supabase.from("ai_usage").select("user_id, calls, questions_generated").eq("day", today),
       supabase.from("question_reports").select("id, reason, created_at, question_id, questions(body, status)").order("created_at", { ascending: false }).limit(100),
@@ -59,7 +60,7 @@ export default async function AdminPage() {
 
         <Card>
           <SectionTitle icon={UserPlus}>Create a user</SectionTitle>
-          <ActionForm action={createUser} submit="Create account">
+          <ActionForm action={createUser} submit="Create account" resetOnSuccess>
             <Field id="new-email" label="Email">
               <input id="new-email" name="email" type="email" autoComplete="off" required className={inputClass} />
             </Field>
@@ -122,15 +123,19 @@ export default async function AdminPage() {
               const l = limits?.find((x) => x.user_id === p.id);
               const u = usage?.find((x) => x.user_id === p.id);
               return (
-                <li key={p.id} className="py-4">
-                  <ActionForm action={saveUserLimit} submit="Save" className="grid items-end gap-3 md:grid-cols-6">
-                    <input type="hidden" name="userId" value={p.id} />
-                    <div className="md:col-span-2">
-                      <p className="font-medium break-all">{emails.get(p.id) ?? p.id}</p>
-                      <p className="text-sm text-muted-foreground">
+                <li key={p.id} className="flex flex-col gap-3 py-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar path={p.avatar_path} gender={p.gender} name={p.full_name ?? undefined} />
+                    <div className="min-w-0">
+                      <p className="font-medium break-all">{p.full_name ?? emails.get(p.id) ?? p.id}</p>
+                      <p className="text-sm text-muted-foreground break-all">
+                        {p.full_name && `${emails.get(p.id)} · `}
                         {p.role} · today {u?.calls ?? 0} calls, {u?.questions_generated ?? 0} questions
                       </p>
                     </div>
+                  </div>
+                  <ActionForm action={saveUserLimit} submit="Save limits" className="grid items-end gap-3 md:grid-cols-4">
+                    <input type="hidden" name="userId" value={p.id} />
                     <Field id={`c-${p.id}`} label="Calls/day">
                       <input id={`c-${p.id}`} name="calls" type="number" min={0} placeholder="default" defaultValue={l?.ai_calls_per_day ?? ""} className={inputClass} />
                     </Field>
@@ -145,6 +150,19 @@ export default async function AdminPage() {
                       Unlimited
                     </label>
                   </ActionForm>
+                  <details className="rounded-lg border">
+                    <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 text-sm font-medium">
+                      <KeyRound aria-hidden="true" className="size-4 text-primary" /> Reset password
+                    </summary>
+                    <div className="border-t p-3">
+                      <ActionForm action={resetUserPassword} submit="Set new password" resetOnSuccess className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <input type="hidden" name="userId" value={p.id} />
+                        <Field id={`pw-${p.id}`} label="New temporary password" help="At least 8 characters. The user can change it in My profile.">
+                          <input id={`pw-${p.id}`} name="password" type="password" autoComplete="new-password" minLength={8} required className={inputClass} aria-describedby={`pw-${p.id}-help`} />
+                        </Field>
+                      </ActionForm>
+                    </div>
+                  </details>
                 </li>
               );
             })}

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { LogOut, UserRound } from "lucide-react";
+import { LogOut } from "lucide-react";
+import { Avatar } from "@/components/avatar";
 import { Logo } from "@/components/logo";
 import { NavLinks } from "@/components/nav-links";
 import { getUser } from "@/lib/auth";
@@ -20,10 +21,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <NavLinks isAdmin={user.isAdmin} />
           </nav>
           <div className="ml-auto flex items-center gap-1 sm:ml-0">
-            <Link href="/akun" className={navLink}>
-              <UserRound aria-hidden="true" className="size-4" />
-              <span className="hidden max-w-48 truncate md:inline">{user.email}</span>
-              <span className="md:hidden">Account</span>
+            <Link href="/akun" className={`${navLink} pl-1.5`} aria-label="My profile">
+              <span aria-hidden="true">
+                <Avatar path={user.avatarPath} gender={user.gender} size="sm" />
+              </span>
+              <span className="hidden max-w-48 truncate md:inline">{user.name ?? user.email}</span>
             </Link>
             <form action={signOut}>
               <button type="submit" className={navLink}>

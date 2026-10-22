@@ -31,6 +31,18 @@ export async function createUser(_p: AdminState, form: FormData): Promise<AdminS
   return done(`Account ${email} created`);
 }
 
+/** Admin sets a new temporary password for a user who forgot theirs; the user can change it in My profile. */
+export async function resetUserPassword(_p: AdminState, form: FormData): Promise<AdminState> {
+  await requireAdmin();
+  const userId = String(form.get("userId") ?? "");
+  const password = String(form.get("password") ?? "");
+  if (!userId) return { error: "Unknown user" };
+  if (password.length < 8) return { error: "The new password needs at least 8 characters" };
+  const { error } = await createAdminClient().auth.admin.updateUserById(userId, { password });
+  if (error) return { error: error.message };
+  return done("Password reset. Share it with the user through a safe channel.");
+}
+
 export async function saveAiSettings(_p: AdminState, form: FormData): Promise<AdminState> {
   const { supabase } = await requireAdmin();
   const provider = String(form.get("provider"));

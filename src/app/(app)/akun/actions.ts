@@ -1,8 +1,46 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { getUser } from "@/lib/auth";
 
-export type PasswordState = { error?: string; field?: "current" | "password" | "confirm"; message?: string };
+export type ProfileState = { error?: string; field?: "name" | "gender" | "photo"; message?: string };
+
+const PHOTO_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+const MAX_PHOTO = 2 * 1024 * 1024;
+
+/** Name, gender, and photo. The photo goes to avatars/<user id>/ (storage RLS only allows the user's own folder). */
+export async function saveProfile(_prev: ProfileState, form: FormData): Promise<ProfileState> {
+  const { supabase, id, avatarPath } = await getUser();
+  const name = String(form.get("name") ?? "").trim();
+  const gender = String(form.get("gender") ?? "");
+  const photo = form.get("photo");
+  const removePhoto = form.get("removePhoto") === "on";
+
+  if (!name || name.length > 100) return { error: "Enter your name (up to 100 characters)", field: "name" };
+  if (gender && gender !== "male" && gender !== "female") return { error: "Choose a gender", field: "gender" };
+
+  let nextPath = avatarPath;
+  if (photo instanceof File && photo.size > 0) {
+    const ext = PHOTO_TYPES[photo.type];
+    if (!ext) return { error: "Use a PNG, JPG, or WebP image", field: "photo" };
+    if (photo.size > MAX_PHOTO) return { error: "The photo must be 2 MB or smaller", field: "photo" };
+    // New file name each time so browsers and CDNs never show the old photo from cache.
+    nextPath = `${id}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("avatars").upload(nextPath, photo, { contentType: photo.type });
+    if (error) return { error: `Could not upload the photo: ${error.message}`, field: "photo" };
+  } else if (removePhoto) {
+    nextPath = null;
+  }
+
+  const { error } = await supabase.from("profiles").update({ full_name: name, gender: gender || null, avatar_path: nextPath }).eq("id", id);
+  if (error) return { error: error.message, field: "name" };
+  if (avatarPath && avatarPath !== nextPath) await supabase.storage.from("avatars").remove([avatarPath]);
+
+  revalidatePath("/", "layout");
+  return { message: "Profile saved" };
+}
+
+export type PasswordState ={ error?: string; field?: "current" | "password" | "confirm"; message?: string };
 
 export async function changePassword(_prev: PasswordState, form: FormData): Promise<PasswordState> {
   const { supabase, email } = await getUser();

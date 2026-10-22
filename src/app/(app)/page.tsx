@@ -8,7 +8,7 @@ import { CreateExamForm } from "./create-exam-form";
 type ExamRow = { exam_id: string; exams: { exam_catalog: { slug: string; display_name: string } } };
 
 export default async function Dashboard() {
-  const { supabase, id, email } = await getUser();
+  const { supabase, id, email, name } = await getUser();
   const [{ data: exams }, { data: pool }, { data: sims }] = await Promise.all([
     supabase.from("user_exams").select("exam_id, exams(exam_catalog(slug, display_name))").eq("user_id", id).order("created_at", { ascending: false }),
     supabase.from("user_exam_pool").select("exam_id, questions(answer_status, status)").eq("user_id", id),
@@ -50,7 +50,7 @@ export default async function Dashboard() {
 
   return (
     <>
-      <Hero eyebrow="Welcome back" title={`Hi, ${email.split("@")[0]}`}>
+      <Hero eyebrow="Welcome back" title={`Hi, ${name?.split(" ")[0] ?? email.split("@")[0]}`}>
         A little practice every day adds up. Pick an exam, take a practice run, and track your progress.
       </Hero>
 

@@ -9,7 +9,8 @@ Membantu user belajar untuk ujian sertifikasi lewat simulasi yang menyerupai uji
 ## 2. Pengguna dan peran
 
 - **User**: belajar. Tidak bisa mendaftar sendiri, akun dibuat admin.
-- **Admin**: pemilik proyek. Mengelola akun, API key, model AI, limit, dan verifikasi blueprint.
+- **Admin**: pemilik proyek. Mengelola akun (termasuk reset password user yang lupa), API key, model AI, limit, blueprint default, dan identitas ujian.
+- **My profile** (`/akun`): nama, jenis kelamin, email (hanya baca), foto profil (upload PNG/JPG/WebP maks 2 MB, atau avatar default sesuai jenis kelamin), dan ganti password.
 
 ## 3. Alur utama
 
@@ -170,7 +171,10 @@ Nilai kelulusan yang disimpan di simulasi adalah `pass_score_snapshot`.
 ## 12. Skema data
 
 ```text
-profiles            id (auth.users), role ('admin' | 'user'), created_at
+profiles            id (auth.users), role ('admin' | 'user'), created_at,
+                    full_name, gender ('male' | 'female' | null), avatar_path
+                    -- user hanya bisa mengubah full_name, gender, avatar_path miliknya (bukan role)
+                    -- foto di Storage bucket "avatars", folder <user id>/; tanpa foto = avatar default sesuai gender
 exam_catalog        id, slug unique, display_name, aliases text[], language,
                     pass_score, pass_score_source, pass_score_url,
                     identity jsonb {full_name, issuer, scope, country, summary}, identity_set_by
