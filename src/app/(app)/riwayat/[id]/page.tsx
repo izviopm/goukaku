@@ -113,7 +113,7 @@ export default async function HistoryDetail({ params }: { params: Promise<{ id: 
                   {it.is_correct ? <CircleCheck aria-hidden="true" className="size-4" /> : it.user_answer ? <CircleX aria-hidden="true" className="size-4" /> : <CircleMinus aria-hidden="true" className="size-4" />}
                   {it.is_correct ? "Correct" : it.user_answer ? "Wrong" : "Not answered"}
                 </p>
-                {s.explanation && <p className="max-w-prose rounded-lg bg-muted p-3 text-sm">{s.explanation}</p>}
+                {s.explanation && <p className="rounded-lg bg-muted p-3 text-sm">{s.explanation}</p>}
                 <ReportQuestion questionId={it.question_id} />
               </Card>
             </StaggerItem>
