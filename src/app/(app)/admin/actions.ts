@@ -22,13 +22,21 @@ function done(message: string): AdminState {
 
 export async function createUser(_p: AdminState, form: FormData): Promise<AdminState> {
   await requireAdmin();
+  const name = String(form.get("name") ?? "").trim();
+  const gender = String(form.get("gender") ?? "");
   const email = String(form.get("email") ?? "").trim();
   const password = String(form.get("password") ?? "");
+  if (!name || name.length > 100) return { error: "Enter the user's name (up to 100 characters)" };
+  if (gender && gender !== "male" && gender !== "female") return { error: "Choose a gender" };
   if (!/^\S+@\S+\.\S+$/.test(email)) return { error: "Enter a valid email" };
   if (password.length < 8) return { error: "The password needs at least 8 characters" };
-  const { error } = await createAdminClient().auth.admin.createUser({ email, password, email_confirm: true });
+  const db = createAdminClient();
+  const { data, error } = await db.auth.admin.createUser({ email, password, email_confirm: true });
   if (error) return { error: error.message };
-  return done(`Account ${email} created`);
+  // The profile row is created by the auth trigger; fill in the details the admin entered.
+  const { error: e2 } = await db.from("profiles").update({ full_name: name, gender: gender || null }).eq("id", data.user.id);
+  if (e2) return { error: `Account created, but the profile was not saved: ${e2.message}` };
+  return done(`Account for ${name} (${email}) created`);
 }
 
 /** Admin sets a new temporary password for a user who forgot theirs; the user can change it in My profile. */

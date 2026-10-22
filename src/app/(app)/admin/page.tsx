@@ -41,8 +41,9 @@ export default async function AdminPage() {
         Accounts, AI models, usage limits, reported questions, and the exam catalog.
       </Hero>
 
-      <Reveal className="grid gap-4 lg:grid-cols-2" delay={0.05}>
-        <Card className="border-ai-border lg:row-span-2">
+      {/* Two independent columns: the tall AI card must not stretch the cards beside it. */}
+      <Reveal className="grid items-start gap-4 lg:grid-cols-2" delay={0.05}>
+        <Card className="border-ai-border">
           <SectionTitle icon={Sparkles} tone="ai">
             AI models
           </SectionTitle>
@@ -58,9 +59,33 @@ export default async function AdminPage() {
           </ActionForm>
         </Card>
 
+        <div className="flex flex-col gap-4">
         <Card>
           <SectionTitle icon={UserPlus}>Create a user</SectionTitle>
           <ActionForm action={createUser} submit="Create account" resetOnSuccess>
+            <Field id="new-name" label="Name">
+              <input id="new-name" name="name" autoComplete="off" maxLength={100} required className={inputClass} />
+            </Field>
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-1 text-sm font-medium">Gender</legend>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ["male", "Male"],
+                    ["female", "Female"],
+                    ["", "Prefer not to say"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <label
+                    key={value || "none"}
+                    className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border px-4 text-sm transition-colors duration-150 hover:bg-muted has-[:checked]:border-primary has-[:checked]:bg-primary-soft sm:min-h-10"
+                  >
+                    <input type="radio" name="gender" value={value} defaultChecked={value === ""} className="size-4 accent-primary" />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <Field id="new-email" label="Email">
               <input id="new-email" name="email" type="email" autoComplete="off" required className={inputClass} />
             </Field>
@@ -88,6 +113,7 @@ export default async function AdminPage() {
             </label>
           </ActionForm>
         </Card>
+        </div>
       </Reveal>
 
       <Reveal delay={0.1}>
