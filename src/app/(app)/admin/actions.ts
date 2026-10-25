@@ -115,6 +115,8 @@ export async function saveUserLimit(_p: AdminState, form: FormData): Promise<Adm
   const calls = int(form.get("calls"));
   const questions = int(form.get("questions"));
   if ([calls, questions].some((n) => Number.isNaN(n))) return { error: "Limits must be whole numbers of 0 or more" };
+  const { data: target } = await supabase.from("profiles").select("role").eq("id", userId).single();
+  if (target?.role === "admin") return { error: "Admins are always unlimited." };
   const { error } = await supabase.from("user_limits").upsert({
     user_id: userId,
     ai_calls_per_day: calls,

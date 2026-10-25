@@ -160,22 +160,28 @@ export default async function AdminPage() {
                       </p>
                     </div>
                   </div>
-                  <ActionForm action={saveUserLimit} submit="Save limits" className="grid items-end gap-3 md:grid-cols-4">
-                    <input type="hidden" name="userId" value={p.id} />
-                    <Field id={`c-${p.id}`} label="Calls/day">
-                      <input id={`c-${p.id}`} name="calls" type="number" min={0} placeholder="default" defaultValue={l?.ai_calls_per_day ?? ""} className={inputClass} />
-                    </Field>
-                    <Field id={`q-${p.id}`} label="Questions/day">
-                      <input id={`q-${p.id}`} name="questions" type="number" min={0} placeholder="default" defaultValue={l?.questions_generated_per_day ?? ""} className={inputClass} />
-                    </Field>
-                    <Field id={`n-${p.id}`} label="Note">
-                      <input id={`n-${p.id}`} name="note" defaultValue={l?.note ?? ""} className={inputClass} />
-                    </Field>
-                    <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium">
-                      <input type="checkbox" name="unlimited" defaultChecked={!!l?.unlimited} className="size-5 accent-primary" />
-                      Unlimited
-                    </label>
-                  </ActionForm>
+                  {p.role === "admin" ? (
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Badge>Unlimited</Badge> Admins are always unlimited: no daily limits and no global cap.
+                    </p>
+                  ) : (
+                    <ActionForm action={saveUserLimit} submit="Save limits" className="grid items-end gap-3 md:grid-cols-4">
+                      <input type="hidden" name="userId" value={p.id} />
+                      <Field id={`c-${p.id}`} label="Calls/day">
+                        <input id={`c-${p.id}`} name="calls" type="number" min={0} placeholder="default" defaultValue={l?.ai_calls_per_day ?? ""} className={inputClass} />
+                      </Field>
+                      <Field id={`q-${p.id}`} label="Questions/day">
+                        <input id={`q-${p.id}`} name="questions" type="number" min={0} placeholder="default" defaultValue={l?.questions_generated_per_day ?? ""} className={inputClass} />
+                      </Field>
+                      <Field id={`n-${p.id}`} label="Note">
+                        <input id={`n-${p.id}`} name="note" defaultValue={l?.note ?? ""} className={inputClass} />
+                      </Field>
+                      <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" name="unlimited" defaultChecked={!!l?.unlimited} className="size-5 accent-primary" />
+                        Unlimited
+                      </label>
+                    </ActionForm>
+                  )}
                   <details className="rounded-lg border">
                     <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 text-sm font-medium">
                       <KeyRound aria-hidden="true" className="size-4 text-primary" /> Reset password

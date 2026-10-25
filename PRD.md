@@ -146,7 +146,8 @@ Simulasi yang ditinggalkan tetap tersimpan dengan status `abandoned`. Soal yang 
 
 - Default limit per user di `app_settings.default_limits`.
 - `user_limits` per user. Admin bisa mengatur angka tertentu atau `unlimited = true`.
-- Urutan resolusi: `unlimited` → nilai user → default.
+- **Admin selalu unlimited**: tidak terkena limit harian (panggilan dan soal) maupun batas global. Limit per user tidak bisa diatur untuk admin.
+- Urutan resolusi: admin atau `unlimited` → nilai user → default.
 - Batas global harian hanya berlaku untuk user biasa. Admin dan user `unlimited` tidak terkena batas global, dan pemakaian mereka tidak dihitung ke batas global. Kill switch tetap berlaku untuk semua.
 - Kill switch admin untuk menghentikan semua panggilan AI.
 - Pengecekan limit dilakukan di server sebelum setiap panggilan AI.
