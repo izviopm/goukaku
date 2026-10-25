@@ -147,7 +147,7 @@ Simulasi yang ditinggalkan tetap tersimpan dengan status `abandoned`. Soal yang 
 - Default limit per user di `app_settings.default_limits`.
 - `user_limits` per user. Admin bisa mengatur angka tertentu atau `unlimited = true`.
 - Urutan resolusi: `unlimited` → nilai user → default.
-- Batas global harian untuk seluruh panggilan AI tetap berlaku walaupun user unlimited.
+- Batas global harian hanya berlaku untuk user biasa. Admin dan user `unlimited` tidak terkena batas global, dan pemakaian mereka tidak dihitung ke batas global. Kill switch tetap berlaku untuk semua.
 - Kill switch admin untuk menghentikan semua panggilan AI.
 - Pengecekan limit dilakukan di server sebelum setiap panggilan AI.
 
@@ -243,7 +243,7 @@ ai_jobs             id, user_id, exam_id, kind ('generate' | 'upload' | 'prepare
 - Soal yang belum `verified` tidak pernah muncul di simulasi.
 - Riwayat tetap menampilkan soal dari snapshot setelah soal diedit atau disembunyikan.
 - Laporan 3 user berbeda menyembunyikan soal.
-- Limit per user dan unlimited bekerja, serta batas global berlaku.
+- Limit per user dan unlimited bekerja, serta batas global berlaku untuk user biasa (bukan admin atau unlimited).
 - Semua tabel memiliki RLS, dan user tidak bisa membaca data user lain.
 
 ## 15. Status tooling

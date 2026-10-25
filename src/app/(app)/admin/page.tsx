@@ -104,7 +104,7 @@ export default async function AdminPage() {
             <Field id="questions" label="AI-generated questions per user per day">
               <input id="questions" name="questions" type="number" min={0} defaultValue={defaults.questions_generated_per_day ?? ""} className={inputClass} />
             </Field>
-            <Field id="global" label="Global AI calls per day" help="Also applies to unlimited users.">
+            <Field id="global" label="Global AI calls per day" help="Applies to regular users only. Admins and unlimited users are exempt and do not count toward it.">
               <input id="global" name="global" type="number" min={0} defaultValue={setting("global_daily_limit").calls_per_day ?? ""} className={inputClass} aria-describedby="global-help" />
             </Field>
             <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-destructive/30 px-3">
