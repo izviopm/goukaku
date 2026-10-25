@@ -1,10 +1,11 @@
+import { Suspense } from "react";
 import Link from "next/link";
-import { LogOut } from "lucide-react";
 import { Avatar } from "@/components/avatar";
 import { Logo } from "@/components/logo";
 import { NavLinks } from "@/components/nav-links";
 import { getUser } from "@/lib/auth";
-import { signOut } from "./actions";
+import { SignOutButton } from "./sign-out-button";
+import { WelcomeToast } from "./welcome-toast";
 
 const navLink =
   "inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-out hover:bg-muted hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
@@ -27,16 +28,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               </span>
               <span className="hidden max-w-48 truncate md:inline">{user.name ?? user.email}</span>
             </Link>
-            <form action={signOut}>
-              <button type="submit" className={navLink}>
-                <LogOut aria-hidden="true" className="size-4" />
-                <span className="hidden sm:inline">Sign out</span>
-                <span className="sr-only sm:hidden">Sign out</span>
-              </button>
-            </form>
+            <SignOutButton className={navLink} />
           </div>
         </div>
       </header>
+      <Suspense>
+        <WelcomeToast name={user.name ?? user.email} />
+      </Suspense>
       <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">{children}</main>
     </>
   );

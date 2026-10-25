@@ -19,5 +19,5 @@ export async function signIn(_prev: LoginState, form: FormData): Promise<LoginSt
     console.error("signIn failed", error);
     return { error: "Could not sign in right now. Please try again later.", field: "password" };
   }
-  redirect("/");
+  redirect("/?welcome=1");
 }
