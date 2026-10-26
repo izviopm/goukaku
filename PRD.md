@@ -21,7 +21,7 @@ Membantu user belajar untuk ujian sertifikasi lewat simulasi yang menyerupai uji
      1. **Ujian dan goal**:
         - **Identitas ujian**: user menjelaskan ujiannya (misalnya "CGI (Certified General Insurance) modul 002"). AI terus bertanya sampai tahu nama resmi, penyelenggara, modul atau level, dan negara, lalu menampilkan kartu ringkasan untuk dikonfirmasi.
         - Identitas ini dibagi per ujian: diisi user pertama, lalu hanya admin yang bisa mengubah atau mengosongkannya. Ringkasannya dikirim ke **setiap prompt AI** (blueprint, generate, ekstraksi, verifikasi, chat). Modul atau level lain dibuat sebagai ujian terpisah, misalnya "CGI 003".
-        - Lalu bahasa soal (dibagi per ujian, diisi sekali), target skor (opsional), dan jumlah soal ujian asli (opsional).
+        - Lalu bahasa soal dan tipe soal (pilihan ganda atau esai; keduanya dibagi per ujian, diisi sekali), target skor (opsional), dan jumlah soal ujian asli (opsional).
      2. **Blueprint** (bagian 6).
      3. **Tambah soal** (bagian 5).
    - **Practice**: terbuka jika goal tersimpan, ada blueprint, dan minimal 10 soal terverifikasi (atau sejumlah soal ujian asli jika lebih kecil). Berisi Start, ringkasan topik, tambah soal, dan pengaturan ujian.
@@ -31,7 +31,8 @@ Membantu user belajar untuk ujian sertifikasi lewat simulasi yang menyerupai uji
 
 ### Membuat ujian
 
-- User memasukkan nama ujian. Sistem memetakan nama ke `exam_catalog` lewat `slug` dan `aliases`, sehingga "CGI" dan "cgi" menuju ujian yang sama.
+- User memasukkan **sertifikasi** dan **modul/subjek** (tulis `General` jika ujian tidak punya modul). Sistem menggabungkan keduanya menjadi nama ujian, lalu memetakan nama ke `exam_catalog` lewat `slug` dan `aliases`, sehingga "CGI" dan "cgi" menuju ujian yang sama.
+- Sertifikasi yang sama dengan modul berbeda adalah ujian terpisah dengan bank soal sendiri, mulai dari kosong. Tidak ada pewarisan soal antar modul.
 - Jika belum ada di katalog, ujian baru dibuat dan dicatat. Tidak ada approval admin.
 - Admin bisa menghapus ujian dari katalog (misalnya salah ketik nama). Penghapusan bersifat permanen dan ikut menghapus soal, blueprint, serta progres dan riwayat semua user untuk ujian itu, jadi admin harus mengetik kode ujian untuk konfirmasi.
 
@@ -42,13 +43,14 @@ Membantu user belajar untuk ujian sertifikasi lewat simulasi yang menyerupai uji
 - Setiap panggilan dihitung ke `ai_usage` dan dicek terhadap limit (lihat bagian 9).
 - Fallback model: jika model utama gagal (down, timeout, rate limit, model tidak ditemukan), model lain di daftar admin dicoba sesuai urutan. Error API key (401/403) dan limit tidak memicu fallback karena semua model memakai key yang sama.
 - Bahasa soal ditentukan per ujian (`exam_catalog.language`). Jika ujian bersifat campuran dan belum ditentukan, AI bertanya ke user lalu menyimpan jawabannya. Ujian yang secara umum berbahasa Inggris (misalnya TOEFL) langsung dibuat dalam bahasa Inggris.
+- Tipe soal ditentukan per ujian (`exam_catalog.format`): `mcq` atau `essay`. Berlaku untuk semua user ujian itu. Jika belum ditentukan, AI boleh menanyakan atau menyimpulkannya dari jenis ujian; setelah ditentukan hanya admin yang bisa mengubahnya.
 - AI boleh memberi saran topik atau tips ujian yang ditemukan di internet, selama disertai sumber.
 
 ## 5. Penambahan soal
 
 | Jalur | Input | Kunci jawaban | Status awal |
 |---|---|---|---|
-| **Upload a file** | CSV/JSON (dibaca langsung) atau PDF/DOCX/TXT (dibaca AI) | Kunci dari file jika ada; jika tidak, AI yang menjawab | `unverified`; `origin = user_upload` (kunci dari file) atau `user_pdf_ai_answered` |
+| **Upload a file** | CSV/JSON (dibaca langsung) atau PDF/DOCX/TXT (dibaca AI) | Kunci dari file jika ada; jika tidak, AI yang menjawab (MCQ) atau menulis jawaban referensi dan rubrik (esai) | `unverified`; `origin = user_upload` (kunci dari file) atau `user_pdf_ai_answered` |
 | **Manual** | Satu soal lewat form, wajib memilih topik | Dari user | `unverified`, `origin = user_upload` |
 | **Generate with AI** | Jumlah soal (tombol atau chat) | AI | `unverified`, `origin = ai_generated` |
 | **Prepare missing** | Dari kartu Start saat soal per topik kurang | AI | `unverified`, `origin = ai_generated` |
@@ -65,7 +67,7 @@ Membantu user belajar untuk ujian sertifikasi lewat simulasi yang menyerupai uji
 
 ### Dedup
 
-- Hash SHA-256 dari teks yang sudah dinormalisasi, dengan unique index `(exam_id, content_hash)`.
+- Hash SHA-256 dari teks yang sudah dinormalisasi, dengan unique index `(exam_id, content_hash)`. MCQ memakai `body + opsi`; esai memakai `essay\nbody` karena tidak punya opsi.
 - Duplikat makna dicek lewat pgvector (fase berikutnya, setelah pipeline dasar berjalan).
 - Saat generate, daftar soal yang sudah ada dikirim ke prompt sebagai larangan duplikat.
 
@@ -73,10 +75,10 @@ Membantu user belajar untuk ujian sertifikasi lewat simulasi yang menyerupai uji
 
 Soal baru tidak dipakai simulasi sampai `answer_status = verified`.
 
-1. **Cek struktur**: jumlah opsi sesuai, tepat satu kunci untuk MCQ, kunci ada di opsi.
-2. **Blind solve**: minimal dua dan maksimal tiga model berbeda menjawab tanpa melihat kunci (hemat token). Model verifikasi diambil sesuai urutan daftar admin; model berikutnya hanya dipakai sebagai cadangan jika ada yang gagal. Jika kurang dari dua model bisa dihubungi, soal tetap `unverified` dan dicek ulang nanti. Penjelasan juga disimpan.
+1. **Cek struktur**: jumlah opsi sesuai, tepat satu kunci untuk MCQ, kunci ada di opsi. Esai: jawaban referensi tidak kosong dan 1–10 kriteria unik.
+2. **Blind solve** (MCQ): minimal dua dan maksimal tiga model berbeda menjawab tanpa melihat kunci (hemat token). Model verifikasi diambil sesuai urutan daftar admin; model berikutnya hanya dipakai sebagai cadangan jika ada yang gagal. Jika kurang dari dua model bisa dihubungi, soal tetap `unverified` dan dicek ulang nanti. Penjelasan juga disimpan. Esai tidak di-blind-solve; struktur yang valid langsung `verified` karena tidak ada satu kunci tunggal untuk dicocokkan.
 3. **Sumber web** (opsional): jika ada sumber resmi yang bertentangan, status `disputed`.
-4. Semua sepakat → `verified`. Ada yang tidak sepakat → `disputed`, tidak dipakai simulasi.
+4. Semua model sepakat dengan kunci → `verified`. Ada yang tidak sepakat → `disputed`, tidak dipakai simulasi.
 
 ## 6. Blueprint ujian
 
@@ -123,11 +125,13 @@ Soal yang dibuat AI dan setiap simulasi mengikuti blueprint efektif user.
 ### Penilaian
 
 - MCQ: dicocokkan dengan kunci snapshot.
-- Esai (fase berikutnya): AI menilai dengan rubrik, bukan kecocokan kata. Ditampilkan sebagai "penilaian AI".
+- Esai: AI menilai jawaban terhadap jawaban referensi dan rubrik snapshot, lalu memberi skor 0–100 dan umpan balik. Satu jawaban = satu panggilan AI, memakai limit harian `ai_calls_per_day` yang sama. Skor simulasi = rata-rata skor AI. `is_correct = skor >= 60` hanya untuk progres/streak/analitik; lulus/tidak lulus tetap memakai `pass_score_snapshot`.
+- Jawaban esai maksimal 5.000 karakter. Jawaban disimpan sebelum dinilai, jadi jika kuota habis di tengah penilaian, simulasi tetap terbuka dan jawaban tidak hilang.
+- Mode `instant`: esai dinilai saat user menekan "Submit answer". Mode `end`: semua esai disimpan lalu dinilai saat submit.
 
 ### Snapshot
 
-- Setiap item simulasi menyimpan `snapshot` (teks soal, opsi, kunci, penjelasan, topik) saat ujian.
+- Setiap item simulasi menyimpan `snapshot` (teks soal, opsi, kunci atau jawaban referensi + rubrik, penjelasan, topik, tipe) saat ujian.
 - Perubahan kunci setelahnya tidak mengubah skor historis. Riwayat menampilkan catatan "kunci diperbarui setelah ujian" jika berlaku.
 
 ### Abandon
@@ -178,6 +182,7 @@ profiles            id (auth.users), role ('admin' | 'user'), created_at,
                     -- user hanya bisa mengubah full_name, gender, avatar_path miliknya (bukan role)
                     -- foto di Storage bucket "avatars", folder <user id>/; tanpa foto = avatar default sesuai gender
 exam_catalog        id, slug unique, display_name, aliases text[], language,
+                    format ('mcq' | 'essay'),
                     pass_score, pass_score_source, pass_score_url,
                     identity jsonb {full_name, issuer, scope, country, summary}, identity_set_by
 exams               id, catalog_id unique, created_by, created_at
@@ -201,6 +206,7 @@ user_progress       user_id, question_id, answered_count, last_correct,
 user_exam_goal      user_id, exam_id, target_score (opsional), exam_size (opsional)
 user_blueprints     user_id, exam_id, topic, percentage   -- blueprint pribadi (bagian 6)
 simulations         id, user_id, exam_id, size, feedback_mode ('instant' | 'end'),
+                    format ('mcq' | 'essay'),
                     status ('in_progress' | 'finished' | 'abandoned'),
                     started_at, finished_at, score, pass_score_snapshot
 simulation_items    id, simulation_id, position, question_id, snapshot jsonb,
@@ -229,7 +235,6 @@ ai_jobs             id, user_id, exam_id, kind ('generate' | 'upload' | 'prepare
 
 ## 13. Di luar cakupan versi pertama
 
-- Soal esai (rubrik dan penilaian AI). Fase berikutnya.
 - Duplikat semantik dengan pgvector. Fase berikutnya.
 - Pendaftaran mandiri dan undangan.
 - Pembayaran dan langganan.

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
 import { findOrCreateExam } from "@/lib/exams";
+import { examDisplayName } from "@/lib/rules";
 import { createClient } from "@/lib/supabase/server";
 
 export async function signOut() {
@@ -15,8 +16,12 @@ export type CreateExamState = { error?: string };
 
 export async function createExam(_prev: CreateExamState, form: FormData): Promise<CreateExamState> {
   const user = await getUser();
-  const name = String(form.get("name") ?? "").trim();
-  if (name.length < 2 || name.length > 100) return { error: "Exam name must be 2–100 characters" };
+  const certification = String(form.get("certification") ?? "").trim();
+  const subject = String(form.get("module") ?? "").trim();
+  if (certification.length < 2 || certification.length > 100) return { error: "Certification must be 2–100 characters" };
+  if (!subject || subject.length > 100) return { error: "Module is required (use General when the exam has no module)" };
+  const name = examDisplayName(certification, subject);
+  if (name.length > 100) return { error: "Certification and module are too long together" };
   let slug: string;
   try {
     ({ slug } = await findOrCreateExam(name, user.id));

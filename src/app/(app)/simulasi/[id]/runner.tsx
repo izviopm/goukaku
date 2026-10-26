@@ -7,13 +7,15 @@ import { easeOut, spring } from "@/components/motion";
 import { Badge, Button, Card, ErrorText, ProgressBar } from "@/components/ui";
 import { ReportQuestion } from "@/components/report";
 import { LETTERS } from "@/lib/rules";
-import { answerItem, endSimulation, type Feedback } from "../actions";
+import { answerItem, endSimulation, saveEssay, submitEssay, type Feedback } from "../actions";
 
 export type RunnerItem = {
   id: string;
   questionId: string | null;
+  type: "mcq" | "essay";
   body: string;
   options: string[];
+  rubric?: string[];
   topic: string | null;
   userAnswer: string | null;
   feedback?: Feedback;
@@ -25,9 +27,13 @@ export function Runner({ simId, examName, mode, items: initial }: { simId: strin
   const [dir, setDir] = useState(1);
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
+  const [finishing, setFinishing] = useState(false);
+  const [grading, setGrading] = useState<{ done: number; total: number } | null>(null);
   const item = items[i];
-  const answered = items.filter((x) => x.userAnswer).length;
+  const answered = items.filter((x) => x.userAnswer?.trim()).length;
   const locked = mode === "instant" && !!item.feedback;
+
+  const update = (id: string, patch: Partial<RunnerItem>) => setItems((cur) => cur.map((x) => (x.id === id ? { ...x, ...patch } : x)));
 
   function go(next: number) {
     setDir(next > i ? 1 : -1);
@@ -35,7 +41,7 @@ export function Runner({ simId, examName, mode, items: initial }: { simId: strin
   }
 
   function choose(letter: string) {
-    if (locked || pending) return;
+    if (locked || pending || item.type !== "mcq") return;
     setError("");
     const prev = items;
     setItems(items.map((x, k) => (k === i ? { ...x, userAnswer: letter } : x)));
@@ -44,15 +50,67 @@ export function Runner({ simId, examName, mode, items: initial }: { simId: strin
       if (res.error) {
         setItems(prev);
         setError(res.error);
-      } else if (res.feedback) setItems((cur) => cur.map((x) => (x.id === item.id ? { ...x, feedback: res.feedback } : x)));
+      } else if (res.feedback) update(item.id, { feedback: res.feedback });
     });
   }
 
-  function end(status: "finished" | "abandoned") {
+  function saveText(id: string, text: string) {
     start(async () => {
-      const res = await endSimulation(simId, status);
-      if (res?.error) setError(res.error);
+      const res = await saveEssay(id, text);
+      if (res.error) setError(res.error);
     });
+  }
+
+  function submitCurrentEssay() {
+    if (locked || pending || finishing) return;
+    const text = item.userAnswer ?? "";
+    if (!text.trim()) {
+      setError("Write your answer first.");
+      return;
+    }
+    setError("");
+    start(async () => {
+      const res = await submitEssay(item.id, text);
+      if (res.error) setError(res.error);
+      else if (res.grade) update(item.id, { feedback: res.grade });
+    });
+  }
+
+  async function finish(status: "finished" | "abandoned") {
+    if (pending || finishing) return;
+    setFinishing(true);
+    setError("");
+    try {
+      // Save every essay first, then grade: a quota stop mid-way keeps all text and the simulation open.
+      const todo = items.filter((x) => x.type === "essay" && x.userAnswer?.trim() && !x.feedback);
+      for (const x of todo) {
+        const res = await saveEssay(x.id, x.userAnswer!);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+      }
+      if (status === "finished") {
+        for (const [n, x] of todo.entries()) {
+          setGrading({ done: n, total: todo.length });
+          const res = await submitEssay(x.id, x.userAnswer!);
+          if (res.error) {
+            setError(res.error);
+            return;
+          }
+          if (res.grade) update(x.id, { feedback: res.grade });
+        }
+      }
+    } catch {
+      setError("Could not finish the practice exam.");
+      return;
+    } finally {
+      setFinishing(false);
+      setGrading(null);
+    }
+    // Outside the try: a server action redirect must reach the router, not this catch.
+    const res = await endSimulation(simId, status);
+    if (res?.error) setError(res.error);
   }
 
   return (
@@ -69,6 +127,11 @@ export function Runner({ simId, examName, mode, items: initial }: { simId: strin
           <span className="tabular-nums">{answered} answered</span>
         </div>
         <ProgressBar value={(100 * answered) / items.length} />
+        {grading && (
+          <p role="status" className="text-sm text-muted-foreground">
+            Grading essay {Math.min(grading.done + 1, grading.total)} of {grading.total} with AI…
+          </p>
+        )}
       </div>
 
       <AnimatePresence mode="wait" initial={false} custom={dir}>
@@ -86,6 +149,7 @@ export function Runner({ simId, examName, mode, items: initial }: { simId: strin
               </span>
             )}
             <p className="max-w-prose whitespace-pre-wrap text-base sm:text-lg">{item.body}</p>
+            {item.type === "mcq" ? (
             <div role="radiogroup" aria-label={`Answer choices for question ${i + 1}`} className="flex flex-col gap-2">
               {item.options.map((opt, k) => {
                 const letter = LETTERS[k];
@@ -133,6 +197,37 @@ export function Runner({ simId, examName, mode, items: initial }: { simId: strin
                 );
               })}
             </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <label htmlFor={`essay-${item.id}`} className="text-sm font-medium">
+                  Your answer
+                </label>
+                <textarea
+                  id={`essay-${item.id}`}
+                  value={item.userAnswer ?? ""}
+                  onChange={(e) => update(item.id, { userAnswer: e.target.value })}
+                  onBlur={(e) => {
+                    if (mode === "end" && e.target.value.trim()) saveText(item.id, e.target.value);
+                  }}
+                  disabled={locked || pending || finishing}
+                  maxLength={5000}
+                  rows={8}
+                  className="w-full rounded-xl border bg-card p-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70"
+                  aria-describedby={`essay-count-${item.id}`}
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span id={`essay-count-${item.id}`} className="tabular-nums">
+                    {(item.userAnswer ?? "").length} / 5,000
+                  </span>
+                  {mode === "instant" && !item.feedback && (
+                    <Button type="button" onClick={submitCurrentEssay} disabled={pending || finishing || !(item.userAnswer ?? "").trim()}>
+                      {pending ? "Grading…" : "Submit answer"}
+                    </Button>
+                  )}
+                </div>
+                {item.rubric?.length ? <p className="text-xs text-muted-foreground">Graded on: {item.rubric.join(" · ")}</p> : null}
+              </div>
+            )}
 
             <div aria-live="polite">
               <AnimatePresence>
@@ -143,11 +238,23 @@ export function Runner({ simId, examName, mode, items: initial }: { simId: strin
                     transition={spring}
                     className={`flex flex-col gap-2 rounded-xl p-4 ${item.feedback.is_correct ? "bg-success/10" : "bg-accent-soft"}`}
                   >
-                    <p className={`flex items-center gap-2 font-semibold ${item.feedback.is_correct ? "text-success" : "text-accent-foreground"}`}>
-                      {item.feedback.is_correct ? <CircleCheck aria-hidden="true" className="size-5" /> : <CircleX aria-hidden="true" className="size-5" />}
-                      {item.feedback.is_correct ? "Correct" : `Wrong. The answer is ${item.feedback.answer}`}
-                    </p>
-                    {item.feedback.explanation && <p className="max-w-prose text-sm">{item.feedback.explanation}</p>}
+                    {item.type === "essay" ? (
+                      <>
+                        <p className={`flex items-center gap-2 font-semibold ${item.feedback.is_correct ? "text-success" : "text-accent-foreground"}`}>
+                          {item.feedback.is_correct ? <CircleCheck aria-hidden="true" className="size-5" /> : <CircleX aria-hidden="true" className="size-5" />}
+                          AI score {item.feedback.score}/100 · {item.feedback.is_correct ? "passing" : "below 60"}
+                        </p>
+                        {item.feedback.feedback && <p className="max-w-prose whitespace-pre-wrap text-sm">{item.feedback.feedback}</p>}
+                      </>
+                    ) : (
+                      <>
+                        <p className={`flex items-center gap-2 font-semibold ${item.feedback.is_correct ? "text-success" : "text-accent-foreground"}`}>
+                          {item.feedback.is_correct ? <CircleCheck aria-hidden="true" className="size-5" /> : <CircleX aria-hidden="true" className="size-5" />}
+                          {item.feedback.is_correct ? "Correct" : `Wrong. The answer is ${item.feedback.answer}`}
+                        </p>
+                        {item.feedback.explanation && <p className="max-w-prose text-sm">{item.feedback.explanation}</p>}
+                      </>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -187,12 +294,12 @@ export function Runner({ simId, examName, mode, items: initial }: { simId: strin
             </Button>
           </div>
           <div className="grid grid-cols-[auto_1fr] gap-2 sm:flex">
-            <Button variant="ghost" onClick={() => end("abandoned")} disabled={pending}>
+            <Button variant="ghost" onClick={() => finish("abandoned")} disabled={pending || finishing}>
               Leave
             </Button>
-            <Button onClick={() => end("finished")} disabled={pending}>
+            <Button onClick={() => finish("finished")} disabled={pending || finishing}>
               <Send aria-hidden="true" className="size-4" />
-              {answered < items.length ? `Submit (${items.length - answered} left)` : "Submit"}
+              {finishing ? "Saving…" : answered < items.length ? `Submit (${items.length - answered} left)` : "Submit"}
             </Button>
           </div>
         </div>

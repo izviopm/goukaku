@@ -54,20 +54,25 @@ export async function saveGoal(_prev: FormState, form: FormData): Promise<FormSt
   const { supabase, id } = await getUser();
   const examId = String(form.get("examId"));
   const language = String(form.get("language") ?? "");
+  const format = String(form.get("format") ?? "");
   const rawTarget = String(form.get("target") ?? "").trim();
   const rawSize = String(form.get("examSize") ?? "").trim();
   const target = rawTarget === "" ? null : Number(rawTarget);
   const examSize = rawSize === "" ? null : Number(rawSize);
 
   if (form.has("language") && language !== "en" && language !== "id") return { error: "Choose the question language", field: "language" };
+  if (form.has("format") && format !== "mcq" && format !== "essay") return { error: "Choose the question format", field: "format" };
   if (target !== null && !(Number.isFinite(target) && target >= 0 && target <= 100)) return { error: "Target must be between 0 and 100", field: "target" };
   if (examSize !== null && !(Number.isInteger(examSize) && examSize >= 1 && examSize <= 500)) return { error: "Enter a whole number between 1 and 500", field: "examSize" };
 
-  if (form.has("language")) {
-    // Shared per exam: only the first learner sets it; the admin can change it later.
+  if (form.has("language") || form.has("format")) {
+    // Shared per exam: only the first learner sets each; the admin can change them later.
     const db = createAdminClient();
     const { data: exam } = await db.from("exams").select("catalog_id").eq("id", examId).single();
-    if (exam) await db.from("exam_catalog").update({ language }).eq("id", exam.catalog_id).is("language", null);
+    if (exam) {
+      if (form.has("language")) await db.from("exam_catalog").update({ language }).eq("id", exam.catalog_id).is("language", null);
+      if (form.has("format")) await db.from("exam_catalog").update({ format }).eq("id", exam.catalog_id).is("format", null);
+    }
   }
   const { error } = await supabase.from("user_exam_goal").upsert({ user_id: id, exam_id: examId, target_score: target, exam_size: examSize });
   if (error) return { error: error.message, field: "target" };

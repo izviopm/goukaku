@@ -16,7 +16,7 @@ function useJobForm(fn: (prev: JobState, form: FormData) => Promise<JobState>) {
 
 const cardClass = "flex flex-col gap-4 rounded-xl border bg-muted/40 p-4 sm:p-5";
 
-export function AddQuestions({ examId, topics }: { examId: string; topics: string[] }) {
+export function AddQuestions({ examId, topics, format }: { examId: string; topics: string[]; format: "mcq" | "essay" }) {
   const up = useJobForm(uploadFile);
   const gen = useJobForm(generateQuestions);
   const man = useJobForm(addManualQuestion);
@@ -31,13 +31,21 @@ export function AddQuestions({ examId, topics }: { examId: string; topics: strin
             <IconTile icon={FileUp} />
             <div>
               <h3 className="font-semibold">Upload a file</h3>
-              <p className="text-sm text-muted-foreground">With or without answers. The AI keeps your answer key and answers the rest.</p>
+              <p className="text-sm text-muted-foreground">
+                {format === "essay"
+                  ? "With or without a reference answer. The AI writes the reference answer and grading criteria when missing."
+                  : "With or without answers. The AI keeps your answer key and answers the rest."}
+              </p>
             </div>
           </div>
           <Field
             id="upload"
             label="CSV, JSON, PDF, DOCX, or TXT"
-            help="CSV columns: question, a, b, c, d, (e), answer, explanation, topic. Scanned PDFs are not supported yet."
+            help={
+              format === "essay"
+                ? "CSV columns: question, answer (reference), rubric (separate criteria with |), explanation, topic. Scanned PDFs are not supported yet."
+                : "CSV columns: question, a, b, c, d, (e), answer, explanation, topic. Scanned PDFs are not supported yet."
+            }
             error={up.err("upload")}
           >
             <input id="upload" name="file" type="file" accept=".csv,.json,.pdf,.docx,.txt" className={inputClass} {...up.aria("upload")} />
@@ -55,7 +63,11 @@ export function AddQuestions({ examId, topics }: { examId: string; topics: strin
             <IconTile icon={Sparkles} tone="ai" />
             <div>
               <h3 className="font-semibold">Generate with AI</h3>
-              <p className="text-sm text-muted-foreground">New questions split by your blueprint, each answer key checked by other models.</p>
+              <p className="text-sm text-muted-foreground">
+                {format === "essay"
+                  ? "New essay questions with a reference answer and grading criteria, split by your blueprint."
+                  : "New questions split by your blueprint, each answer key checked by other models."}
+              </p>
             </div>
           </div>
           <Field id="count" label="How many questions" help="Between 1 and 100." error={gen.err("count")}>
@@ -79,20 +91,31 @@ export function AddQuestions({ examId, topics }: { examId: string; topics: strin
           <Field id="body" label="Question" error={man.err("body")}>
             <textarea id="body" name="body" rows={3} className={inputClass} {...man.aria("body")} />
           </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {["A", "B", "C", "D", "E"].map((l) => (
-              <Field key={l} id={`opt${l}`} label={`Option ${l}${l === "E" ? " (optional)" : ""}`}>
-                <input id={`opt${l}`} name={`opt${l}`} className={inputClass} />
+          {format === "essay" ? (
+            <div className="grid gap-3">
+              <Field id="reference" label="Reference answer" help="What a full-credit answer should contain. Not shown during practice.">
+                <textarea id="reference" name="reference" rows={4} className={inputClass} />
               </Field>
-            ))}
-            <Field id="answer" label="Correct answer">
-              <select id="answer" name="answer" className={inputClass} defaultValue="A">
-                {["A", "B", "C", "D", "E"].map((l) => (
-                  <option key={l}>{l}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
+              <Field id="rubric" label="Grading criteria" help="One criterion per line, up to 10. The AI grades against these.">
+                <textarea id="rubric" name="rubric" rows={3} className={inputClass} />
+              </Field>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {["A", "B", "C", "D", "E"].map((l) => (
+                <Field key={l} id={`opt${l}`} label={`Option ${l}${l === "E" ? " (optional)" : ""}`}>
+                  <input id={`opt${l}`} name={`opt${l}`} className={inputClass} />
+                </Field>
+              ))}
+              <Field id="answer" label="Correct answer">
+                <select id="answer" name="answer" className={inputClass} defaultValue="A">
+                  {["A", "B", "C", "D", "E"].map((l) => (
+                    <option key={l}>{l}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
           <Field id="topic" label="Topic" help="Pick one of your blueprint topics so it counts in practice." error={man.err("topic")}>
             <input id="topic" name="topic" list="manual-topics" className={inputClass} autoComplete="off" {...man.aria("topic")} />
           </Field>

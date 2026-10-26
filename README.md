@@ -6,11 +6,12 @@ Simulasi ujian untuk belajar. User membuat bank ujian (misalnya CGI), mengisi so
 
 ## Fitur utama
 
-- **Bank ujian** per sertifikasi (contoh: CGI, TOEFL). Bank soal dibagi antar user dalam satu ujian.
-- **Tambah soal** dengan tiga cara: upload soal beserta jawaban, upload soal tanpa jawaban (AI yang menjawab), atau minta AI mencari atau membuat soal lewat chat.
+- **Bank ujian** per sertifikasi + modul (contoh: CGI 002, TOEFL General). Bank soal dibagi antar user dalam satu ujian.
+- **Dua tipe soal**: pilihan ganda (diverifikasi kunci) dan esai (dinilai AI dengan rubrik). Tipe ditentukan per ujian.
+- **Tambah soal** dengan tiga cara: upload soal beserta jawaban, upload soal tanpa jawaban (AI yang menjawab), atau minta AI mencari atau membuat soal lewat chat. Esai memakai jawaban referensi + rubrik; AI menulisnya bila file tidak menyediakannya.
 - **Blueprint ujian**: komposisi topik dan persentasenya, dicari dari internet, atau ditanyakan ke user, atau ditentukan AI.
-- **Verifikasi kunci jawaban**: kunci hanya dipakai setelah lolos pemeriksaan (struktur, blind solve oleh beberapa model, dan sumber web bila ada).
-- **Simulasi**: user memilih jumlah soal dan mode umpan balik (langsung setelah menjawab, atau di akhir). Mode tidak bisa diganti di tengah simulasi.
+- **Verifikasi kunci jawaban**: kunci hanya dipakai setelah lolos pemeriksaan (struktur, blind solve oleh beberapa model, dan sumber web bila ada). Esai cukup lolos cek struktur (jawaban referensi + 1–10 kriteria).
+- **Simulasi**: user memilih jumlah soal dan mode umpan balik (langsung setelah menjawab, atau di akhir). Mode tidak bisa diganti di tengah simulasi. Jawaban esai dinilai AI satu panggilan per jawaban, memakai limit harian yang sama.
 - **Riwayat dan analisis**: setiap simulasi tersimpan dengan snapshot soal, sehingga riwayat tidak berubah ketika bank soal diperbarui. Analisis per topik.
 - **Laporan soal**: soal disembunyikan otomatis setelah 3 laporan dari user berbeda, lalu diverifikasi ulang.
 - **Chat AI** untuk semua user. Hanya admin yang bisa mengatur API key, menambah user, dan mengatur limit per user.
@@ -65,10 +66,10 @@ SUPABASE_SERVICE_ROLE_KEY=   # hanya server, jangan pernah NEXT_PUBLIC_*
 ### Struktur
 
 - `src/app/(app)/`: dashboard, `ujian/[slug]`, `simulasi/[id]`, `riwayat`, `admin`
-- `src/app/api/chat`: chat AI dengan aksi terstruktur (bahasa, blueprint, nilai lulus, target, generate soal)
+- `src/app/api/chat`: chat AI dengan aksi terstruktur (bahasa, tipe soal, blueprint, nilai lulus, target, generate soal)
 - `src/lib/ai.ts`: adapter provider (OpenAI, Anthropic, Gemini) dan cek limit
-- `src/lib/questions.ts`, `generate.ts`: dedup, verifikasi blind solve, job generate soal
-- Logika simulasi, penilaian, laporan, dan limit ada di fungsi SQL (`start_simulation`, `answer_item`, `end_simulation`, `report_question`, `consume_ai_quota`)
+- `src/lib/questions.ts`, `generate.ts`: dedup, verifikasi blind solve, job generate soal; `essay.ts`: penilaian esai oleh AI
+- Logika simulasi, penilaian, laporan, dan limit ada di fungsi SQL (`start_simulation`, `answer_item`, `save_essay_answer`, `end_simulation`, `report_question`, `consume_ai_quota`)
 
 ## Keamanan
 

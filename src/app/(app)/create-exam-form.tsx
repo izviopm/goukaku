@@ -11,15 +11,18 @@ export function CreateExamForm() {
   return (
     <form action={action} className="flex flex-col gap-4" noValidate>
       <FocusFirstError trigger={state} />
-      <Field id="exam-name" label="Exam name" help='For example "CGI" or "TOEFL". The same name always leads to the same question bank.' error={state.error}>
+      <Field id="exam-certification" label="Certification" help='For example "CGI". The same certification and module always lead to the same question bank.' error={state.error}>
         <input
-          id="exam-name"
-          name="name"
+          id="exam-certification"
+          name="certification"
           required
           className={inputClass}
           aria-invalid={!!state.error}
-          aria-describedby={state.error ? "exam-name-error" : "exam-name-help"}
+          aria-describedby={state.error ? "exam-certification-error" : "exam-certification-help"}
         />
+      </Field>
+      <Field id="exam-module" label="Module / subject" help='For example "002 Pengantar Hukum Asuransi". Type "General" when the exam has no module.'>
+        <input id="exam-module" name="module" required className={inputClass} />
       </Field>
       <Button type="submit" disabled={pending}>
         <Plus aria-hidden="true" className="size-4" />

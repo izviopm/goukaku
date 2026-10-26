@@ -8,7 +8,7 @@ import { Button, ErrorText, Field, inputClass } from "@/components/ui";
 import { getReadiness, startSimulation, type FormState, type Readiness } from "./actions";
 import { prepareMissing } from "./question-actions";
 
-export function StartPractice({ examId, defaultSize, initial }: { examId: string; defaultSize: number; initial: Readiness[] }) {
+export function StartPractice({ examId, defaultSize, initial, format }: { examId: string; defaultSize: number; initial: Readiness[]; format: "mcq" | "essay" }) {
   const [state, action, pending] = useActionState<FormState, FormData>(startSimulation, {});
   const [size, setSize] = useState(defaultSize);
   const [readiness, setReadiness] = useState(initial);
@@ -85,12 +85,22 @@ export function StartPractice({ examId, defaultSize, initial }: { examId: string
       ) : null}
       {job.jobId && <JobProgress key={job.jobId} jobId={job.jobId} />}
 
+      {format === "essay" && <p className="text-sm text-muted-foreground">Each essay answer is graded by AI and uses one AI call from your daily limit.</p>}
+
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-sm font-medium">Feedback mode (cannot be changed after you start)</legend>
         <div className="grid gap-2 sm:grid-cols-2">
           {[
-            ["instant", "Instant", "See right or wrong and the explanation after each answer"],
-            ["end", "At the end", "Everything is graded after you submit, like the real exam"],
+            [
+              "instant",
+              "Instant",
+              format === "essay" ? "AI grades each answer right after you submit it" : "See right or wrong and the explanation after each answer",
+            ],
+            [
+              "end",
+              "At the end",
+              format === "essay" ? "All answers are graded by AI when you submit" : "Everything is graded after you submit, like the real exam",
+            ],
           ].map(([v, label, desc], i) => (
             <label
               key={v}

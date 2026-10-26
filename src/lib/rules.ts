@@ -1,13 +1,31 @@
 // Pure rules with no server/runtime imports, so they can be unit-tested with plain `node --test`.
 
 export const LETTERS = ["A", "B", "C", "D", "E"];
-export type QuestionInput = { body: string; options: string[]; answer?: string; explanation?: string; topic?: string };
+export type QuestionType = "mcq" | "essay";
+export type QuestionInput = {
+  type?: QuestionType;
+  body: string;
+  options: string[];
+  answer?: string;
+  rubric?: string[];
+  explanation?: string;
+  topic?: string;
+};
 
 export const normalize = (s: string) => s.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
 
-/** PRD 5, step 1: option count, exactly one key, key exists among options. Returns an error or null. */
+/** PRD 5, step 1: MCQ option count and key, or essay reference answer and criteria. Returns an error or null. */
 export function structureError(q: QuestionInput): string | null {
   if (!q.body?.trim()) return "The question text is empty";
+  if (q.type === "essay") {
+    if (!q.answer?.trim()) return "An essay needs a reference answer";
+    const rubric = q.rubric ?? [];
+    if (!rubric.length) return "An essay needs at least one grading criterion";
+    if (rubric.length > 10) return "Use at most 10 grading criteria";
+    if (rubric.some((c) => typeof c !== "string" || !c.trim())) return "A grading criterion is empty";
+    if (new Set(rubric.map(normalize)).size !== rubric.length) return "Two grading criteria are the same";
+    return null;
+  }
   if (!Array.isArray(q.options) || q.options.length < 2 || q.options.length > LETTERS.length)
     return "A question needs 2 to 5 options";
   if (q.options.some((o) => typeof o !== "string" || !o.trim())) return "An option is empty";
@@ -16,6 +34,18 @@ export function structureError(q: QuestionInput): string | null {
   if (!a || !/^[A-E]$/.test(a)) return "The answer must be exactly one letter from A to E";
   if (LETTERS.indexOf(a) >= q.options.length) return "The answer is not one of the options";
   return null;
+}
+
+/** "CGI" + "002 ..." is its own bank; "General" means the exam has no module. */
+export function examDisplayName(certification: string, module: string) {
+  const c = certification.trim();
+  const m = module.trim();
+  return m.toLowerCase() === "general" ? c : `${c} ${m}`.replace(/\s+/g, " ").trim();
+}
+
+export function clampScore(n: unknown) {
+  const x = Number(n);
+  return Number.isFinite(x) ? Math.min(100, Math.max(0, Math.round(x))) : 0;
 }
 
 export function chunk<T>(arr: T[], size = 10): T[][] {
@@ -118,15 +148,26 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c.trim()));
 }
 
-/** CSV header: question, a, b, c, d, e, answer, explanation, topic (case-insensitive; e optional). */
-export function questionsFromCsv(text: string): QuestionInput[] {
+/** CSV header: question, a, b, c, d, e, answer, explanation, topic (case-insensitive; e optional). Essay: question, answer|reference, rubric (separate criteria with |), explanation, topic. */
+export function questionsFromCsv(text: string, type: QuestionType = "mcq"): QuestionInput[] {
   const [header, ...rows] = parseCsv(text);
   if (!header) return [];
   const col = (name: string) => header.findIndex((h) => h.trim().toLowerCase() === name);
   const qi = col("question");
   if (qi < 0) throw new Error('The CSV header has no "question" column');
+  if (type === "essay")
+    return rows.map((r) => ({
+      type,
+      body: r[qi] ?? "",
+      options: [],
+      answer: (r[col("answer")] ?? r[col("reference")] ?? "").trim(),
+      rubric: (r[col("rubric")] ?? "").split("|").map((s) => s.trim()).filter(Boolean),
+      explanation: r[col("explanation")]?.trim(),
+      topic: r[col("topic")]?.trim(),
+    }));
   const opts = ["a", "b", "c", "d", "e"].map(col).filter((i) => i >= 0);
   return rows.map((r) => ({
+    type,
     body: r[qi] ?? "",
     options: opts.map((i) => (r[i] ?? "").trim()).filter(Boolean),
     answer: r[col("answer")]?.trim(),
@@ -135,14 +176,23 @@ export function questionsFromCsv(text: string): QuestionInput[] {
   }));
 }
 
-/** JSON: array of {question|body, options[], answer, explanation?, topic?}. */
-export function questionsFromJson(text: string): QuestionInput[] {
+/** JSON: array of {question|body, options[], answer, explanation?, topic?}. Essay: {question|body, answer|reference, rubric[], explanation?, topic?}. */
+export function questionsFromJson(text: string, type: QuestionType = "mcq"): QuestionInput[] {
   const data = JSON.parse(text);
   if (!Array.isArray(data)) throw new Error("The JSON must be an array of questions");
   return data.map((q) => ({
+    type,
     body: String(q.body ?? q.question ?? ""),
-    options: Array.isArray(q.options) ? q.options.map(String) : [],
-    answer: q.answer == null ? undefined : String(q.answer),
+    options: type === "essay" ? [] : Array.isArray(q.options) ? q.options.map(String) : [],
+    answer: q.answer == null ? (type === "essay" && q.reference != null ? String(q.reference) : undefined) : String(q.answer),
+    rubric:
+      type === "essay"
+        ? Array.isArray(q.rubric)
+          ? q.rubric.map(String)
+          : typeof q.rubric === "string"
+            ? q.rubric.split("|").map((s: string) => s.trim()).filter(Boolean)
+            : []
+        : undefined,
     explanation: q.explanation == null ? undefined : String(q.explanation),
     topic: q.topic == null ? undefined : String(q.topic),
   }));

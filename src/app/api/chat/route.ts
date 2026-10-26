@@ -17,6 +17,7 @@ const Body = z.object({
 
 const Action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("set_language"), language: z.enum(["id", "en"]) }),
+  z.object({ type: z.literal("set_format"), format: z.enum(["mcq", "essay"]) }),
   z.object({
     type: z.literal("set_blueprint"),
     source: z.enum(["web", "user", "ai"]),
@@ -67,6 +68,9 @@ export async function POST(req: Request) {
         // Shared per exam: only set when nobody has chosen it yet (the admin can change it later).
         await db.from("exam_catalog").update({ language: a.language }).eq("id", exam.catalog_id).is("language", null);
         notes.push(`Question language saved: ${a.language === "en" ? "English" : "Indonesian"}.`);
+      } else if (a.type === "set_format") {
+        await db.from("exam_catalog").update({ format: a.format }).eq("id", exam.catalog_id).is("format", null);
+        notes.push(`Question type saved: ${a.format === "essay" ? "Essay" : "Multiple choice"}.`);
       } else if (a.type === "set_blueprint") {
         // Same hybrid rule as the Blueprint panel: default if none exists yet, otherwise personal.
         const res = await saveBlueprint(examId, normalizeBlueprint(a.topics), a.source, a.source_url ?? null);
@@ -132,6 +136,7 @@ Ujian yang dimaksud: ${describeExam(String(c.display_name), (c.identity as ExamI
 
 Kondisi ujian saat ini:
 - Bahasa soal: ${c.language ?? "BELUM ditentukan"}
+- Tipe soal: ${c.format === "essay" ? "essay (dinilai AI)" : c.format === "mcq" ? "pilihan ganda" : "BELUM ditentukan"}
 - Blueprint:\n${bpText}
 - Nilai kelulusan: ${c.pass_score ?? "belum ada"}${c.pass_score_source ? ` (sumber ${c.pass_score_source})` : ""}
 - Target pribadi user: ${target ?? "belum ada"}
@@ -139,9 +144,10 @@ Kondisi ujian saat ini:
 
 Aturan:
 1. Bahasa: jika ujian umumnya berbahasa Inggris (misalnya TOEFL, IELTS), langsung set "en". Jika umumnya bahasa Indonesia, set "id". Jika campuran atau tidak jelas, TANYA user dulu.
+1b. Tipe soal: set "mcq" atau "essay" hanya jika user menyebutkannya atau jenis ujiannya jelas (misalnya ujian esai). Jika tidak jelas, TANYA user. Tipe soal dipakai bersama semua user ujian ini.
 2. Blueprint: arahkan user ke panel Blueprint di halaman ujian (tombol "Suggest with AI" atau "Set it myself"). Hanya simpan blueprint lewat aksi jika user secara eksplisit meminta dan menyebutkan topik serta persentasenya. Total persentase harus 100.
 3. Nilai kelulusan: jika belum ada, cari di internet (source "web" + url). Jika tidak ketemu, tanya user (source "user").
-4. Saat user minta soal (misalnya "tambahkan 60 soal"), pastikan bahasa dan blueprint sudah ada; jika belum, arahkan user menyelesaikan langkah setup di halaman ujian dulu.
+4. Saat user minta soal (misalnya "tambahkan 60 soal"), pastikan bahasa, tipe soal, dan blueprint sudah ada; jika belum, arahkan user menyelesaikan langkah setup di halaman ujian dulu.
 5a. Saat menjelaskan topik lemah, gunakan pengetahuanmu tentang topik itu dan sarankan latihan; jangan mengarang data skor user.
 5. Saran topik atau tips dari internet WAJIB disertai sumber (URL).
 6. Jangan pernah menyebut atau meminta API key.
@@ -152,6 +158,7 @@ Untuk menyimpan sesuatu, sisipkan blok berikut (boleh lebih dari satu) di akhir 
 \`\`\`
 Tipe aksi yang tersedia:
 - {"type":"set_language","language":"id"|"en"}
+- {"type":"set_format","format":"mcq"|"essay"}
 - {"type":"set_blueprint","source":"web"|"user"|"ai","source_url":"https://...","topics":[{"topic":"...","percentage":30}]}
 - {"type":"set_pass_score","score":70,"source":"web"|"user","url":"https://..."}
 - {"type":"set_target","score":80}

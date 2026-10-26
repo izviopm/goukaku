@@ -30,6 +30,7 @@ async function setupError(userId: string, examId: string) {
   ]);
   if (!ctx.identity) return "Describe this exam in step 1 first, so the AI writes questions for the right certification.";
   if (!ctx.language) return "Set the question language first.";
+  if (!ctx.format) return "Choose the question type first.";
   if (!bp?.length) return "Set a blueprint first, so new questions follow your topic mix.";
   return null;
 }
@@ -46,11 +47,13 @@ export async function uploadFile(_prev: JobState, form: FormData): Promise<JobSt
   const file = form.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a file", field: "upload" };
   const name = file.name.toLowerCase();
+  const { format } = await examContext(examId);
+  if (!format) return { error: "Choose the question type first.", field: "upload" };
 
   try {
     if (name.endsWith(".csv") || name.endsWith(".json")) {
       const text = await file.text();
-      const items = name.endsWith(".json") ? questionsFromJson(text) : questionsFromCsv(text);
+      const items = name.endsWith(".json") ? questionsFromJson(text, format) : questionsFromCsv(text, format);
       if (!items.length) return { error: "No questions found in the file", field: "upload" };
       if (items.length > 500) return { error: "Upload at most 500 questions at a time", field: "upload" };
       const bad = issues(items);
@@ -102,18 +105,35 @@ export async function prepareMissing(examId: string, size: number): Promise<JobS
 export async function addManualQuestion(_prev: JobState, form: FormData): Promise<JobState> {
   const user = await getUser();
   const examId = String(form.get("examId"));
-  const q: QuestionInput = {
-    body: String(form.get("body") ?? ""),
-    options: ["A", "B", "C", "D", "E"].map((l) => String(form.get(`opt${l}`) ?? "").trim()).filter(Boolean),
-    answer: String(form.get("answer") ?? ""),
-    explanation: String(form.get("explanation") ?? ""),
-    topic: String(form.get("topic") ?? ""),
-  };
+  const { format } = await examContext(examId);
+  if (!format) return { error: "Choose the question type first.", field: "body" };
+  const q: QuestionInput =
+    format === "essay"
+      ? {
+          type: "essay",
+          body: String(form.get("body") ?? ""),
+          options: [],
+          answer: String(form.get("reference") ?? ""),
+          rubric: String(form.get("rubric") ?? "")
+            .split(/\r?\n/)
+            .map((s) => s.trim())
+            .filter(Boolean),
+          explanation: String(form.get("explanation") ?? ""),
+          topic: String(form.get("topic") ?? ""),
+        }
+      : {
+          type: "mcq",
+          body: String(form.get("body") ?? ""),
+          options: ["A", "B", "C", "D", "E"].map((l) => String(form.get(`opt${l}`) ?? "").trim()).filter(Boolean),
+          answer: String(form.get("answer") ?? ""),
+          explanation: String(form.get("explanation") ?? ""),
+          topic: String(form.get("topic") ?? ""),
+        };
   const bad = structureError(q);
   if (bad) return { error: bad, field: "body" };
   if (!q.topic?.trim()) return { error: "Choose a topic so the question counts toward your blueprint", field: "topic" };
   try {
-    const { newIds, existing } = await saveQuestions(examId, user.id, [q], "user_upload");
+    const { newIds, existing } = await saveQuestions(examId, user.id, [q], "user_upload", format);
     after(() => verifyQuestions(user.id, newIds).catch((e) => console.error("verify failed", e)));
     revalidatePath("/ujian/[slug]", "page");
     return { message: existing ? "This question is already in the bank." : "Question saved. It is being verified now." };

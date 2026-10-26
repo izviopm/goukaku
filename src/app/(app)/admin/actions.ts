@@ -149,6 +149,7 @@ export async function saveIdentity(_p: AdminState, form: FormData): Promise<Admi
 export async function saveCatalog(_p: AdminState, form: FormData): Promise<AdminState> {
   const { supabase } = await requireAdmin();
   const lang = String(form.get("language") ?? "");
+  const fmt = String(form.get("format") ?? "");
   const pass = String(form.get("pass_score") ?? "").trim();
   const passNum = pass === "" ? null : Number(pass);
   if (passNum != null && !(passNum >= 0 && passNum <= 100)) return { error: "Passing score must be between 0 and 100" };
@@ -159,6 +160,7 @@ export async function saveCatalog(_p: AdminState, form: FormData): Promise<Admin
       display_name: String(form.get("display_name") ?? "").trim(),
       aliases: [...new Set([String(form.get("slug")), ...aliases])],
       language: lang === "id" || lang === "en" ? lang : null,
+      format: fmt === "mcq" || fmt === "essay" ? fmt : null,
       pass_score: passNum,
       pass_score_source: passNum == null ? null : String(form.get("pass_score_source") || "user"),
     })

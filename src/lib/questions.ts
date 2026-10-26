@@ -3,29 +3,32 @@ import { createHash } from "node:crypto";
 import { complete, consumeQuota, extractJson, getVerifierModels, isFatal } from "@/lib/ai";
 import { examContext } from "@/lib/exam-context";
 import { MAX_VERIFIERS, upToN } from "@/lib/fallback";
-import { chunk, LETTERS, normalize, structureError, type QuestionInput } from "@/lib/rules";
+import { chunk, LETTERS, normalize, structureError, type QuestionInput, type QuestionType } from "@/lib/rules";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export type Origin = "user_upload" | "user_pdf_ai_answered" | "ai_generated" | "web";
 
 export function contentHash(q: QuestionInput) {
-  return createHash("sha256").update([q.body, ...q.options].map(normalize).join("\n")).digest("hex");
+  const text = q.type === "essay" ? `essay\n${normalize(q.body)}` : [q.body, ...q.options].map(normalize).join("\n");
+  return createHash("sha256").update(text).digest("hex");
 }
 
 /**
  * Inserts into the shared bank (dedup by content hash) and adds every question, new or existing, to the user's pool.
  * Returns ids of newly inserted questions and the count that already existed.
  */
-export async function saveQuestions(examId: string, userId: string, items: QuestionInput[], origin: Origin) {
+export async function saveQuestions(examId: string, userId: string, items: QuestionInput[], origin: Origin, type: QuestionType = "mcq") {
   const db = createAdminClient();
   const rows = new Map<string, Record<string, unknown>>();
   for (const q of items) {
-    const hash = contentHash(q);
+    const hash = contentHash({ ...q, type });
     rows.set(hash, {
       exam_id: examId,
+      type,
       body: q.body.trim(),
-      options: q.options.map((o) => o.trim()),
-      answer: q.answer?.trim().toUpperCase() || null,
+      options: type === "essay" ? [] : q.options.map((o) => o.trim()),
+      answer: type === "essay" ? q.answer?.trim() || null : q.answer?.trim().toUpperCase() || null,
+      rubric: type === "essay" ? (q.rubric ?? []).map((c) => c.trim()) : null,
       explanation: q.explanation?.trim() || null,
       topic: q.topic?.trim() || null,
       origin,
@@ -93,16 +96,22 @@ export async function verifyQuestions(userId: string, ids: string[]) {
   if (!ids.length) return;
   const db = createAdminClient();
   const models = await getVerifierModels();
-  const { data: qs, error } = await db.from("questions").select("id, exam_id, body, options, answer").in("id", ids);
+  const { data: qs, error } = await db
+    .from("questions")
+    .select("id, exam_id, body, options, answer, type, rubric")
+    .in("id", ids);
   if (error) throw new Error(error.message);
   const examText = qs?.length ? (await examContext(qs[0].exam_id)).text : undefined;
 
   const now = new Date().toISOString();
   const valid: typeof qs = [];
   for (const q of qs ?? []) {
-    const err = structureError(q);
+    const err = structureError(q as unknown as QuestionInput);
     if (err) {
       await db.from("questions").update({ answer_status: "disputed", verification: { checked_at: now, structure: err } }).eq("id", q.id);
+    } else if (q.type === "essay") {
+      // Essays have no single answer to solve; a valid reference answer and rubric is enough.
+      await db.from("questions").update({ answer_status: "verified", verification: { checked_at: now, structure: "ok", mode: "rubric" } }).eq("id", q.id);
     } else valid.push(q);
   }
 

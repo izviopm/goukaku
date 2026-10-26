@@ -30,6 +30,7 @@ function Status({ state }: { state: FormState }) {
 export function GoalForm({
   examId,
   language,
+  format,
   target,
   examSize,
   officialPass,
@@ -37,6 +38,7 @@ export function GoalForm({
 }: {
   examId: string;
   language: "en" | "id" | null;
+  format: "mcq" | "essay" | null;
   target: number | null;
   examSize: number | null;
   officialPass: number | null;
@@ -60,6 +62,22 @@ export function GoalForm({
             </option>
             <option value="en">English</option>
             <option value="id">Indonesian</option>
+          </select>
+        </Field>
+      )}
+      {format ? (
+        <p className="text-sm">
+          <span className="font-medium">Question type:</span> {format === "essay" ? "Essay" : "Multiple choice"}
+          <span className="text-muted-foreground"> · shared by everyone studying this exam</span>
+        </p>
+      ) : (
+        <Field id="format" label="Question type" help="Shared by everyone studying this exam; only the admin can change it later." error={f.err("format")}>
+          <select id="format" name="format" defaultValue="" className={inputClass} {...f.aria("format")}>
+            <option value="" disabled>
+              Choose…
+            </option>
+            <option value="mcq">Multiple choice (2–5 options)</option>
+            <option value="essay">Essay (AI-graded)</option>
           </select>
         </Field>
       )}

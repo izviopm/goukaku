@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { structureError, topicPlan, questionsFromCsv, modelSettingsError, blueprintError, normalizeBlueprint } from "./rules.ts";
+import { structureError, topicPlan, questionsFromCsv, questionsFromJson, modelSettingsError, blueprintError, normalizeBlueprint, examDisplayName, clampScore } from "./rules.ts";
 
 test("blueprintError", () => {
   assert.equal(blueprintError([{ topic: "A", percentage: 60 }, { topic: "B", percentage: 40 }]), null);
@@ -42,6 +42,40 @@ test("topicPlan follows percentages and sums to total", () => {
   assert.equal(plan.length, 7);
   assert.equal(plan.filter((t) => t === "x").length, 4); // 3.5 -> 4 by largest remainder
   assert.equal(topicPlan([{ topic: "x", percentage: 33.3 }, { topic: "y", percentage: 66.7 }], 60).length, 60);
+});
+
+test("structureError for essays needs a reference answer and unique criteria", () => {
+  const ok = { type: "essay", body: "Explain", options: [], answer: "Because", rubric: ["Mentions A", "Mentions B"] };
+  assert.equal(structureError(ok), null);
+  assert.match(structureError({ ...ok, answer: " " }), /reference answer/);
+  assert.match(structureError({ ...ok, rubric: [] }), /at least one/);
+  assert.match(structureError({ ...ok, rubric: Array.from({ length: 11 }, (_, i) => `c${i}`) }), /at most 10/);
+  assert.match(structureError({ ...ok, rubric: ["A", " a "] }), /the same/);
+});
+
+test("essay CSV and JSON use reference answers, not options", () => {
+  const csv = "question,reference,rubric,topic\nExplain X,Because A,Point A|Point B,Law\n";
+  const [c] = questionsFromCsv(csv, "essay");
+  assert.equal(c.type, "essay");
+  assert.equal(c.answer, "Because A");
+  assert.deepEqual(c.rubric, ["Point A", "Point B"]);
+  assert.deepEqual(c.options, []);
+  const [j] = questionsFromJson('[{"question":"Explain Y","answer":"Because B","rubric":["R"],"topic":"Law"}]', "essay");
+  assert.equal(j.type, "essay");
+  assert.equal(j.answer, "Because B");
+});
+
+test("examDisplayName joins certification and module, General adds nothing", () => {
+  assert.equal(examDisplayName("CGI", "002 Pengantar Hukum"), "CGI 002 Pengantar Hukum");
+  assert.equal(examDisplayName(" CGI ", "general"), "CGI");
+  assert.equal(examDisplayName("TOEFL", "General"), "TOEFL");
+});
+
+test("clampScore rounds and bounds", () => {
+  assert.equal(clampScore(72.6), 73);
+  assert.equal(clampScore(-3), 0);
+  assert.equal(clampScore(120), 100);
+  assert.equal(clampScore("bad"), 0);
 });
 
 test("questionsFromCsv handles quotes, commas and newlines", () => {

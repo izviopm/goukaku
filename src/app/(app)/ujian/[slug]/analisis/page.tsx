@@ -34,7 +34,14 @@ export default async function AnalyticsPage({ params, searchParams }: { params: 
       .from("user_progress")
       .select("question_id, correct_count, wrong_count, correct_streak, last_correct, last_answered_at")
       .eq("user_id", userId),
-    supabase.from("questions").select("id, body, topic").eq("exam_id", exam.examId).eq("answer_status", "verified").eq("status", "active").limit(2000),
+    supabase
+      .from("questions")
+      .select("id, body, topic")
+      .eq("exam_id", exam.examId)
+      .eq("type", exam.format ?? "mcq")
+      .eq("answer_status", "verified")
+      .eq("status", "active")
+      .limit(2000),
   ]);
 
   const display = new Map(((blueprint ?? []) as { topic: string }[]).map((b) => [normalize(b.topic), b.topic]));

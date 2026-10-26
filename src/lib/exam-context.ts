@@ -12,8 +12,21 @@ export function describeExam(name: string, identity: ExamIdentity | null) {
 }
 
 export async function examContext(examId: string) {
-  const { data } = await createAdminClient().from("exams").select("exam_catalog(id, display_name, language, identity)").eq("id", examId).single();
-  const c = data?.exam_catalog as unknown as { id: string; display_name: string; language: "id" | "en" | null; identity: ExamIdentity | null } | null;
+  const { data } = await createAdminClient().from("exams").select("exam_catalog(id, display_name, language, identity, format)").eq("id", examId).single();
+  const c = data?.exam_catalog as unknown as {
+    id: string;
+    display_name: string;
+    language: "id" | "en" | null;
+    identity: ExamIdentity | null;
+    format: "mcq" | "essay" | null;
+  } | null;
   if (!c) throw new Error("Exam not found");
-  return { catalogId: c.id, name: c.display_name, language: c.language, identity: c.identity, text: describeExam(c.display_name, c.identity) };
+  return {
+    catalogId: c.id,
+    name: c.display_name,
+    language: c.language,
+    identity: c.identity,
+    format: c.format,
+    text: describeExam(c.display_name, c.identity),
+  };
 }

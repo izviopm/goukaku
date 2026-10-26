@@ -234,6 +234,13 @@ export default async function AdminPage() {
                         <option value="en">English</option>
                       </select>
                     </Field>
+                    <Field id={`fm-${c.id}`} label="Question type">
+                      <select id={`fm-${c.id}`} name="format" defaultValue={c.format ?? ""} className={inputClass}>
+                        <option value="">Not set</option>
+                        <option value="mcq">Multiple choice</option>
+                        <option value="essay">Essay</option>
+                      </select>
+                    </Field>
                     <Field id={`ps-${c.id}`} label="Passing score">
                       <input id={`ps-${c.id}`} name="pass_score" type="number" min={0} max={100} step="0.1" defaultValue={c.pass_score ?? ""} className={inputClass} />
                     </Field>

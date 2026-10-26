@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import {
   ChartColumn,
   CircleCheck,
+  FileText,
   Flag,
   History,
   Hourglass,
@@ -46,12 +47,19 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
     supabase.from("exam_blueprints").select("topic, source_url").eq("exam_id", exam.examId).not("confirmed_by", "is", null),
     supabase.from("questions").select("topic").eq("exam_id", exam.examId).not("topic", "is", null).limit(1000),
     supabase.from("user_exam_goal").select("target_score, exam_size").eq("exam_id", exam.examId).eq("user_id", userId).maybeSingle(),
-    supabase.from("questions").select("*", { count: "exact", head: true }).eq("exam_id", exam.examId).eq("answer_status", "unverified").eq("status", "active"),
+    supabase
+      .from("questions")
+      .select("*", { count: "exact", head: true })
+      .eq("exam_id", exam.examId)
+      .eq("type", exam.format ?? "mcq")
+      .eq("answer_status", "unverified")
+      .eq("status", "active"),
     supabase
       .from("user_progress")
-      .select("correct_count, wrong_count, correct_streak, last_correct, questions!inner(exam_id, topic)")
+      .select("correct_count, wrong_count, correct_streak, last_correct, questions!inner(exam_id, type, topic)")
       .eq("user_id", userId)
-      .eq("questions.exam_id", exam.examId),
+      .eq("questions.exam_id", exam.examId)
+      .eq("questions.type", exam.format ?? "mcq"),
   ]);
 
   const bp = ((blueprint ?? []) as { topic: string; percentage: number; personal: boolean }[]).sort((a, b) => b.percentage - a.percentage);
@@ -63,7 +71,7 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
   const unanswered = readiness.reduce((s, r) => s + r.unanswered, 0);
   const minimum = Math.min(MIN_TO_PRACTICE, goal?.exam_size ?? MIN_TO_PRACTICE);
   const identity = exam.identity as ExamIdentity | null;
-  const goalDone = !!identity && !!goal && !!exam.language;
+  const goalDone = !!identity && !!goal && !!exam.language && !!exam.format;
   const blueprintDone = bp.length > 0;
   const questionsDone = verified >= minimum;
   const practice = goalDone && blueprintDone && questionsDone;
@@ -86,6 +94,7 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
     <GoalForm
       examId={exam.examId}
       language={exam.language}
+      format={exam.format}
       target={goal?.target_score ?? null}
       examSize={goal?.exam_size ?? null}
       officialPass={exam.pass_score}
@@ -102,13 +111,17 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
       topicSuggestions={topicSuggestions}
     />
   );
-  const addQuestions = <AddQuestions examId={exam.examId} topics={bp.map((b) => b.topic)} />;
+  const addQuestions = <AddQuestions examId={exam.examId} topics={bp.map((b) => b.topic)} format={exam.format ?? "mcq"} />;
 
   const badges = (
     <span className="mt-1 flex flex-wrap gap-2">
       <Badge>
         <Languages aria-hidden="true" className="size-3.5" />
         {exam.language === "en" ? "English" : exam.language === "id" ? "Indonesian" : "Language not set"}
+      </Badge>
+      <Badge>
+        <FileText aria-hidden="true" className="size-3.5" />
+        {exam.format === "essay" ? "Essay" : exam.format === "mcq" ? "Multiple choice" : "Format not set"}
       </Badge>
       <Badge>
         <Flag aria-hidden="true" className="size-3.5" />
@@ -134,7 +147,7 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
             current={current === 1}
             summary={
               goalDone
-                ? `${identity?.full_name}${identity?.scope ? ` · ${identity.scope}` : ""} · ${exam.language === "en" ? "English" : "Indonesian"}${goal?.target_score != null ? ` · target ${goal.target_score}` : ""}`
+                ? `${identity?.full_name}${identity?.scope ? ` · ${identity.scope}` : ""} · ${exam.language === "en" ? "English" : "Indonesian"} · ${exam.format === "essay" ? "essay" : "multiple choice"}${goal?.target_score != null ? ` · target ${goal.target_score}` : ""}`
                 : undefined
             }
           >
@@ -239,7 +252,7 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
       <Reveal className="grid gap-4 lg:grid-cols-2" delay={0.1}>
         <Card id="practice" className="scroll-mt-6">
           <SectionTitle icon={Play}>Start a practice exam</SectionTitle>
-          <StartPractice key={JSON.stringify(readiness)} examId={exam.examId} defaultSize={defaultSize} initial={readiness} />
+          <StartPractice key={JSON.stringify(readiness)} examId={exam.examId} defaultSize={defaultSize} initial={readiness} format={exam.format ?? "mcq"} />
         </Card>
         <Card>
           <SectionTitle icon={ChartColumn} aside={<LinkButton href={`/ujian/${slug}/analisis`} variant="ghost" className="min-h-9 px-2 text-sm">See all</LinkButton>}>
