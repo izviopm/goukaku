@@ -42,7 +42,7 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
   if (!exam) notFound();
   const { supabase, id: userId } = await getUser();
 
-  const [{ data: blueprint }, { data: defaults }, { data: topicRows }, { data: goal }, { count: pending }, { data: progress }] = await Promise.all([
+  const [{ data: blueprint }, { data: defaults }, { data: topicRows }, { data: goal }, { count: pending }, { data: progress }, { data: activeJobs }] = await Promise.all([
     supabase.rpc("effective_blueprint", { p_exam_id: exam.examId }),
     supabase.from("exam_blueprints").select("topic, source_url").eq("exam_id", exam.examId).not("confirmed_by", "is", null),
     supabase.from("questions").select("topic").eq("exam_id", exam.examId).not("topic", "is", null).limit(1000),
@@ -60,7 +60,10 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
       .eq("user_id", userId)
       .eq("questions.exam_id", exam.examId)
       .eq("questions.type", exam.format ?? "mcq"),
+    // Jobs still in flight, so their progress shows again after a refresh.
+    supabase.from("ai_jobs").select("id, kind").eq("exam_id", exam.examId).eq("user_id", userId).in("status", ["queued", "running"]).order("created_at", { ascending: false }),
   ]);
+  const activeJob = (kind: string) => (activeJobs ?? []).find((j) => j.kind === kind)?.id;
 
   const bp = ((blueprint ?? []) as { topic: string; percentage: number; personal: boolean }[]).sort((a, b) => b.percentage - a.percentage);
   const defaultSize = Math.min(goal?.exam_size ?? 20, 200);
@@ -111,7 +114,14 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
       topicSuggestions={topicSuggestions}
     />
   );
-  const addQuestions = <AddQuestions examId={exam.examId} topics={bp.map((b) => b.topic)} format={exam.format ?? "mcq"} />;
+  const addQuestions = (
+    <AddQuestions
+      examId={exam.examId}
+      topics={bp.map((b) => b.topic)}
+      format={exam.format ?? "mcq"}
+      activeJobs={{ upload: activeJob("upload"), generate: activeJob("generate") }}
+    />
+  );
 
   const badges = (
     <span className="mt-1 flex flex-wrap gap-2">
@@ -252,7 +262,7 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
       <Reveal className="grid gap-4 lg:grid-cols-2" delay={0.1}>
         <Card id="practice" className="scroll-mt-6">
           <SectionTitle icon={Play}>Start a practice exam</SectionTitle>
-          <StartPractice key={JSON.stringify(readiness)} examId={exam.examId} defaultSize={defaultSize} initial={readiness} format={exam.format ?? "mcq"} />
+          <StartPractice key={JSON.stringify(readiness)} examId={exam.examId} defaultSize={defaultSize} initial={readiness} format={exam.format ?? "mcq"} activeJobId={activeJob("prepare")} />
         </Card>
         <Card>
           <SectionTitle icon={ChartColumn} aside={<LinkButton href={`/ujian/${slug}/analisis`} variant="ghost" className="min-h-9 px-2 text-sm">See all</LinkButton>}>

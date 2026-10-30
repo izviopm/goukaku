@@ -10,6 +10,7 @@ type Props = {
   provider: string;
   baseUrl: string;
   hasKey: boolean;
+  hasTavilyKey: boolean;
   models: { id: string; name: string }[];
   main: string;
   verifiers: string[];
@@ -75,6 +76,14 @@ export function AiSettingsFields(props: Props) {
 
       <Field id="apiKey" label="API key" help={props.hasKey ? "Stored encrypted in Vault. Leave empty to keep it." : "No API key yet."}>
         <input id="apiKey" name="apiKey" type="password" autoComplete="off" className={inputClass} aria-describedby="apiKey-help" />
+      </Field>
+
+      <Field
+        id="tavilyKey"
+        label="Tavily API key (web search)"
+        help={`Gives web search to providers without their own (OpenAI-compatible endpoints other than OpenRouter). ${props.hasTavilyKey ? "Stored encrypted in Vault. Leave empty to keep it." : "No Tavily key yet, so those providers cannot search the web."}`}
+      >
+        <input id="tavilyKey" name="tavilyKey" type="password" autoComplete="off" placeholder="tvly-…" className={inputClass} aria-describedby="tavilyKey-help" />
       </Field>
 
       <fieldset className="flex flex-col gap-3">

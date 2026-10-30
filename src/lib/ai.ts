@@ -45,14 +45,15 @@ export async function consumeQuota(userId: string, calls: number, questions = 0)
   }
 }
 
-type Config = { provider: Provider; model: string; models: string[]; baseUrl: string; apiKey: string };
+type Config = { provider: Provider; model: string; models: string[]; baseUrl: string; apiKey: string; tavilyKey: string | null };
 
 async function getConfig(): Promise<Config> {
   const db = createAdminClient();
-  const [{ data: settings }, { data: key }, { data: list }] = await Promise.all([
+  const [{ data: settings }, { data: key }, { data: list }, { data: tavily }] = await Promise.all([
     db.from("ai_settings").select("provider, model, base_url").eq("id", true).maybeSingle(),
     db.rpc("get_ai_api_key"),
     db.from("app_settings").select("value").eq("key", "ai_models").maybeSingle(),
+    db.rpc("get_tavily_api_key"),
   ]);
   if (!settings || !key) throw new AIError("AI is not set up yet. Ask the admin to set the provider, model, and API key.");
   return {
@@ -61,16 +62,43 @@ async function getConfig(): Promise<Config> {
     models: ((list?.value?.models as AiModel[]) ?? []).map((m) => m.id),
     baseUrl: (settings.base_url as string | null) ?? "",
     apiKey: key as string,
+    tavilyKey: (tavily as string | null) || null,
   };
 }
 
-// OpenRouter adds web results through its "web" plugin; plain OpenAI-compatible endpoints have no search tool.
+// OpenRouter adds web results through its "web" plugin; plain OpenAI-compatible endpoints have no search tool,
+// so they get web results from Tavily when the admin set a Tavily key.
 const isOpenRouter = (baseUrl: string | null | undefined) => /(^|\.|\/\/)openrouter\.ai(\/|$)/i.test(baseUrl ?? "");
+const hasNativeSearch = (provider: string, baseUrl: string | null | undefined) => provider !== "openai_compatible" || isOpenRouter(baseUrl);
 
 export async function webSearchAvailable() {
-  const { data } = await createAdminClient().from("ai_settings").select("provider, base_url").eq("id", true).maybeSingle();
+  const { data } = await createAdminClient().from("ai_settings").select("provider, base_url, tavily_key_secret_id").eq("id", true).maybeSingle();
   if (!data) return false;
-  return data.provider !== "openai_compatible" || isOpenRouter(data.base_url);
+  return hasNativeSearch(data.provider, data.base_url) || !!data.tavily_key_secret_id;
+}
+
+/** Tavily results as prompt text. Search trouble must not block the answer, so failures return "". */
+async function tavilyContext(apiKey: string, messages: ChatMessage[]) {
+  const query = [...messages].reverse().find((m) => m.role === "user")?.content.trim().slice(0, 400);
+  if (!query) return "";
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      signal: AbortSignal.timeout(20_000),
+      headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
+      body: JSON.stringify({ query, max_results: 5, search_depth: "basic" }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { results } = (await res.json()) as { results?: { title: string; url: string; content: string }[] };
+    if (!results?.length) return "";
+    return (
+      "\n\nWeb search results (cite the URL when you use one; they may be incomplete):\n" +
+      results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.content}`).join("\n\n")
+    );
+  } catch (e) {
+    console.warn("Tavily search failed", e);
+    return "";
+  }
 }
 
 export async function getVerifierModels(): Promise<string[]> {
@@ -86,6 +114,9 @@ export async function getVerifierModels(): Promise<string[]> {
 export async function complete(opts: CallOptions): Promise<string> {
   const cfg = await getConfig();
   const order = opts.model ? [opts.model] : [cfg.model, ...cfg.models.filter((m) => m !== cfg.model)];
+  // Search once, before the model loop, so a fallback model gets the same results without a second search.
+  if (opts.webSearch && !hasNativeSearch(cfg.provider, cfg.baseUrl) && cfg.tavilyKey)
+    opts = { ...opts, system: opts.system + (await tavilyContext(cfg.tavilyKey, opts.messages)) };
   try {
     const { model, value, failed } = await firstSuccess(order, (m) => callModel(cfg, m, opts), isFatal);
     if (failed.length) console.warn(`AI fallback: answered by ${model} after`, failed);

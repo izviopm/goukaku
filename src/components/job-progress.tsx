@@ -65,7 +65,12 @@ export function JobProgress({ jobId }: { jobId: string }) {
         </p>
       )}
       {!finished && <ProgressBar value={job.requested ? (100 * job.done) / job.requested : 5} tone="ai" />}
-      {!finished && <p className="text-xs text-muted-foreground">You can leave this page. The work continues in the background.</p>}
+      {!finished && (
+        <p className="text-xs text-muted-foreground">
+          {job.status === "queued" && job.done ? "Paused at the server time limit; continuing now. " : ""}
+          You can refresh or leave this page. Long jobs continue in steps while this page is open, and pick up where they stopped when you come back.
+        </p>
+      )}
     </div>
   );
 }

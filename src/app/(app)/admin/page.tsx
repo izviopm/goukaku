@@ -15,7 +15,7 @@ export default async function AdminPage() {
 
   const [{ data: ai }, { data: settings }, { data: profiles }, { data: limits }, { data: usage }, { data: reports }, { data: catalog }, users] =
     await Promise.all([
-      supabase.from("ai_settings").select("provider, model, base_url, api_key_secret_id").eq("id", true).maybeSingle(),
+      supabase.from("ai_settings").select("provider, model, base_url, api_key_secret_id, tavily_key_secret_id").eq("id", true).maybeSingle(),
       supabase.from("app_settings").select("key, value"),
       supabase.from("profiles").select("id, role, full_name, gender, avatar_path, created_at").order("created_at"),
       supabase.from("user_limits").select("*"),
@@ -52,6 +52,7 @@ export default async function AdminPage() {
               provider={ai?.provider ?? "anthropic"}
               baseUrl={ai?.base_url ?? ""}
               hasKey={!!ai?.api_key_secret_id}
+              hasTavilyKey={!!ai?.tavily_key_secret_id}
               models={models}
               main={ai?.model ?? ""}
               verifiers={verifierIds}

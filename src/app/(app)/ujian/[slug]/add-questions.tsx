@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { CircleCheck, FileUp, PencilLine, Sparkles } from "lucide-react";
 import { FocusFirstError } from "@/components/focus-error";
 import { JobProgress } from "@/components/job-progress";
@@ -16,10 +16,24 @@ function useJobForm(fn: (prev: JobState, form: FormData) => Promise<JobState>) {
 
 const cardClass = "flex flex-col gap-4 rounded-xl border bg-muted/40 p-4 sm:p-5";
 
-export function AddQuestions({ examId, topics, format }: { examId: string; topics: string[]; format: "mcq" | "essay" }) {
+export function AddQuestions({
+  examId,
+  topics,
+  format,
+  activeJobs,
+}: {
+  examId: string;
+  topics: string[];
+  format: "mcq" | "essay";
+  activeJobs: { upload?: string; generate?: string };
+}) {
   const up = useJobForm(uploadFile);
   const gen = useJobForm(generateQuestions);
   const man = useJobForm(addManualQuestion);
+  // Kept in state: the refresh after a job ends drops it from the props, but its result should stay visible.
+  const [resumed] = useState(activeJobs);
+  const upJob = up.state.jobId ?? resumed.upload;
+  const genJob = gen.state.jobId ?? resumed.generate;
 
   return (
     <div className="flex flex-col gap-4">
@@ -53,7 +67,7 @@ export function AddQuestions({ examId, topics, format }: { examId: string; topic
           <Button type="submit" disabled={up.pending} className="self-start">
             {up.pending ? "Uploading…" : "Upload"}
           </Button>
-          {up.state.jobId && <JobProgress key={up.state.jobId} jobId={up.state.jobId} />}
+          {upJob && <JobProgress key={upJob} jobId={upJob} />}
         </form>
 
         <form action={gen.action} className={`${cardClass} border-ai-border bg-ai-soft/40`} noValidate>
@@ -77,7 +91,7 @@ export function AddQuestions({ examId, topics, format }: { examId: string; topic
             <Sparkles aria-hidden="true" className="size-4" />
             {gen.pending ? "Starting…" : "Generate"}
           </Button>
-          {gen.state.jobId && <JobProgress key={gen.state.jobId} jobId={gen.state.jobId} />}
+          {genJob && <JobProgress key={genJob} jobId={genJob} />}
         </form>
       </div>
 

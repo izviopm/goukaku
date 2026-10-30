@@ -8,38 +8,95 @@ import { createAdminClient } from "@/lib/supabase/server";
 const LANG = { id: "Bahasa Indonesia", en: "English" } as const;
 const PREPARE_ROUNDS = 3;
 const PREPARE_BUFFER = 1.2; // some generated questions fail verification, so ask for a little more
+// A Vercel function stops at maxDuration (300s). Pause between batches before that; the next poll resumes the job.
+const BUDGET_MS = 240_000;
+// No heartbeat for this long means the function was cut off mid-batch.
+const STALE_MS = 6 * 60_000;
 
-type Job = { id: string; user_id: string; exam_id: string; kind: "generate" | "upload" | "prepare"; requested: number; payload: Record<string, unknown> | null };
+type Job = {
+  id: string;
+  user_id: string;
+  exam_id: string;
+  kind: "generate" | "upload" | "prepare";
+  requested: number;
+  done: number;
+  status: string;
+  updated_at: string;
+  payload: Record<string, unknown> | null;
+  summary: Record<string, unknown> | null;
+};
 type Db = ReturnType<typeof createAdminClient>;
 
-/** Background runner for every AI job (generate, upload, prepare). Progress and a summary are written to ai_jobs. */
+class Paused extends Error {}
+const now = () => new Date().toISOString();
+
+/**
+ * Background runner for every AI job (generate, upload, prepare). Progress and a summary are written to ai_jobs.
+ * Generate and prepare jobs pause before the function time limit and continue from `done` when resumed.
+ */
 export async function runJob(jobId: string) {
   const db = createAdminClient();
   const { data: job } = await db.from("ai_jobs").select("*").eq("id", jobId).single<Job>();
   if (!job) return;
   // Claim the job atomically so a duplicate trigger cannot run it twice.
-  const { data: claimed } = await db.from("ai_jobs").update({ status: "running" }).eq("id", jobId).eq("status", "queued").select("id");
+  const { data: claimed } = await db.from("ai_jobs").update({ status: "running", updated_at: now() }).eq("id", jobId).eq("status", "queued").select("id");
   if (!claimed?.length) return;
 
-  let done = 0;
-  const progress = async (n: number, extra: Record<string, unknown> = {}) => {
+  const started = Date.now();
+  let stepStart = started;
+  let done = job.done;
+  let added = Number(job.summary?.added ?? 0);
+  const progress: Progress = async (n, newIds = 0) => {
     done += n;
-    await db.from("ai_jobs").update({ done, ...extra }).eq("id", jobId);
+    added += newIds;
+    await db.from("ai_jobs").update({ done, summary: { added }, updated_at: now() }).eq("id", jobId);
+    const took = Date.now() - stepStart;
+    stepStart = Date.now();
+    return Date.now() - started + took < BUDGET_MS;
   };
 
   try {
     const exam = await examInfo(job.exam_id);
-    const summary =
-      job.kind === "upload" ? await runUpload(db, job, exam, progress) : job.kind === "prepare" ? await runPrepare(db, job, exam, progress) : await runGenerate(db, job, exam, progress);
-    await db.from("ai_jobs").update({ status: "done", summary }).eq("id", jobId);
+    if (job.kind === "upload") {
+      await db.from("ai_jobs").update({ status: "done", summary: await runUpload(db, job, exam, progress) }).eq("id", jobId);
+      return;
+    }
+    await (job.kind === "prepare" ? runPrepare(db, job, exam, progress) : runGenerate(db, job, exam, progress));
+    await db.from("ai_jobs").update({ status: "done", summary: { added } }).eq("id", jobId);
   } catch (e) {
-    await db.from("ai_jobs").update({ status: "failed", error: e instanceof Error ? e.message : String(e) }).eq("id", jobId);
+    if (e instanceof Paused) await db.from("ai_jobs").update({ status: "queued", updated_at: now() }).eq("id", jobId);
+    else await db.from("ai_jobs").update({ status: "failed", error: e instanceof Error ? e.message : String(e) }).eq("id", jobId);
   }
+}
+
+/**
+ * Called while someone watches a job: runs a paused (queued) job and requeues one whose function was cut off.
+ * Uploads cannot resume safely (their rows are saved in one go), so a cut-off upload is marked failed instead.
+ */
+export async function resumeJob(job: Pick<Job, "id" | "kind" | "status" | "updated_at">) {
+  if (job.status === "running") {
+    if (Date.now() - Date.parse(job.updated_at) < STALE_MS) return;
+    const patch =
+      job.kind === "upload"
+        ? { status: "failed", error: "The upload stopped before it finished. Questions already saved are kept; upload the rest again." }
+        : { status: "queued" };
+    // Matching updated_at makes this a compare-and-set, so only one watcher requeues it.
+    const { data } = await createAdminClient()
+      .from("ai_jobs")
+      .update({ ...patch, updated_at: now() })
+      .eq("id", job.id)
+      .eq("status", "running")
+      .eq("updated_at", job.updated_at)
+      .select("id");
+    if (!data?.length || job.kind === "upload") return;
+  } else if (job.status !== "queued") return;
+  await runJob(job.id);
 }
 
 /** `text` is the confirmed exam identity, e.g. "Certified General Insurance (AAUI) · Module 002 …". */
 type Exam = { text: string; language: "id" | "en" | null; format: "mcq" | "essay" | null };
-type Progress = (n: number, extra?: Record<string, unknown>) => Promise<void>;
+/** Records `n` more steps and `newIds` new questions; resolves false when another step as long as the last would not fit the time budget. */
+type Progress = (n: number, newIds?: number) => Promise<boolean>;
 
 async function examInfo(examId: string): Promise<Exam> {
   const ctx = await examContext(examId);
@@ -60,45 +117,42 @@ async function recentBodies(db: Db, examId: string) {
 async function generateTopics(db: Db, job: Job, exam: Exam, topics: string[], progress: Progress) {
   if (!exam.language) throw new AIError("Set the question language for this exam first.");
   if (!exam.format) throw new AIError("Choose the question format for this exam first.");
-  let added = 0;
-  for (const batch of chunk(topics)) {
+  const batches = chunk(topics);
+  for (const [i, batch] of batches.entries()) {
     await consumeQuota(job.user_id, 1, batch.length);
     const items = await generateBatch(exam.text, LANG[exam.language], batch, await recentBodies(db, job.exam_id), exam.format);
     const { newIds } = await saveQuestions(job.exam_id, job.user_id, items, "ai_generated", exam.format);
     await verifyQuestions(job.user_id, newIds);
-    added += newIds.length;
-    await progress(items.length);
+    // Count planned slots, not returned items, so a resumed generate job skips exactly the finished batches.
+    const fits = await progress(batch.length, newIds.length);
+    if (!fits && i < batches.length - 1) throw new Paused();
   }
-  return added;
 }
 
 /** "Generate with AI": N new questions split by the user's blueprint. */
 async function runGenerate(db: Db, job: Job, exam: Exam, progress: Progress) {
   const blueprint = await blueprintFor(db, job);
   if (!blueprint.length) throw new AIError("Set a blueprint for this exam first.");
-  const added = await generateTopics(db, job, exam, topicPlan(blueprint, job.requested), progress);
-  return { added };
+  await generateTopics(db, job, exam, topicPlan(blueprint, job.requested).slice(job.done), progress);
 }
 
 /** "Prepare missing questions": fill only the topics short for a run of `size`, re-checking after verification. */
 async function runPrepare(db: Db, job: Job, exam: Exam, progress: Progress) {
   const size = Number(job.payload?.size);
-  let added = 0;
   let short: { topic: string; missing: number }[] = [];
   for (let round = 1; round <= PREPARE_ROUNDS; round++) {
     const { data } = await db.rpc("exam_readiness_for", { p_user: job.user_id, p_exam_id: job.exam_id, p_size: size });
     short = ((data ?? []) as { topic: string; needed: number; available: number }[])
       .filter((r) => r.available < r.needed)
       .map((r) => ({ topic: r.topic, missing: r.needed - r.available }));
-    if (!short.length) return { added, rounds: round - 1 };
+    if (!short.length) return;
     const plan = short.flatMap((s) => Array(Math.ceil(s.missing * PREPARE_BUFFER)).fill(s.topic));
-    added += await generateTopics(db, job, exam, plan, progress);
+    await generateTopics(db, job, exam, plan, progress);
   }
   const { data } = await db.rpc("exam_readiness_for", { p_user: job.user_id, p_exam_id: job.exam_id, p_size: size });
   const left = ((data ?? []) as { topic: string; needed: number; available: number }[]).filter((r) => r.available < r.needed);
   if (left.length)
     throw new AIError(`Still short after ${PREPARE_ROUNDS} rounds: ${left.map((r) => `${r.topic} ${r.available} of ${r.needed}`).join(", ")}. Try again or add questions yourself.`);
-  return { added, rounds: PREPARE_ROUNDS };
 }
 
 /**

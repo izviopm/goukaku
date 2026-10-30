@@ -8,13 +8,25 @@ import { Button, ErrorText, Field, inputClass } from "@/components/ui";
 import { getReadiness, startSimulation, type FormState, type Readiness } from "./actions";
 import { prepareMissing } from "./question-actions";
 
-export function StartPractice({ examId, defaultSize, initial, format }: { examId: string; defaultSize: number; initial: Readiness[]; format: "mcq" | "essay" }) {
+export function StartPractice({
+  examId,
+  defaultSize,
+  initial,
+  format,
+  activeJobId,
+}: {
+  examId: string;
+  defaultSize: number;
+  initial: Readiness[];
+  format: "mcq" | "essay";
+  activeJobId?: string;
+}) {
   const [state, action, pending] = useActionState<FormState, FormData>(startSimulation, {});
   const [size, setSize] = useState(defaultSize);
   const [readiness, setReadiness] = useState(initial);
   const [checking, startCheck] = useTransition();
   const [preparing, startPrepare] = useTransition();
-  const [job, setJob] = useState<{ jobId?: string; error?: string; message?: string }>({});
+  const [job, setJob] = useState<{ jobId?: string; error?: string; message?: string }>({ jobId: activeJobId });
 
   // Re-check per-topic availability when the size changes (debounced).
   useEffect(() => {

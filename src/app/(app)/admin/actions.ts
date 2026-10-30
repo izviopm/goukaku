@@ -55,6 +55,7 @@ export async function saveAiSettings(_p: AdminState, form: FormData): Promise<Ad
   const { supabase } = await requireAdmin();
   const provider = String(form.get("provider"));
   const key = String(form.get("apiKey") ?? "").trim();
+  const tavilyKey = String(form.get("tavilyKey") ?? "").trim();
   const baseUrl = String(form.get("baseUrl") ?? "").trim();
   if (!["openai", "anthropic", "gemini", "openai_compatible"].includes(provider)) return { error: "Unknown provider" };
   if (provider === "openai_compatible" && !/^https?:\/\/\S+$/.test(baseUrl)) return { error: "Enter a base URL, for example https://openrouter.ai/api/v1" };
@@ -85,13 +86,17 @@ export async function saveAiSettings(_p: AdminState, form: FormData): Promise<Ad
     const { error: e } = await supabase.rpc("set_ai_api_key", { p_key: key });
     if (e) return { error: e.message };
   }
+  if (tavilyKey) {
+    const { error: e } = await supabase.rpc("set_tavily_api_key", { p_key: tavilyKey });
+    if (e) return { error: e.message };
+  }
   const { error: e2 } = await supabase.from("app_settings").upsert([
     { key: "ai_models", value: { models: settings.models } },
     // List order is priority order: the first verifiers are used, later ones are backups.
     { key: "verifier_models", value: { models: settings.models.map((m) => m.id).filter((id) => settings.verifiers.includes(id)) } },
   ]);
   if (e2) return { error: e2.message };
-  return done(key ? "AI settings and API key saved" : "AI settings saved");
+  return done(key || tavilyKey ? "AI settings and keys saved" : "AI settings saved");
 }
 
 export async function saveLimits(_p: AdminState, form: FormData): Promise<AdminState> {
