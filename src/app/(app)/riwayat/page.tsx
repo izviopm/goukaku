@@ -19,7 +19,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
 
   let query = supabase
     .from("simulations")
-    .select("id, started_at, feedback_mode, size, score, status, pass_score_snapshot, exams(exam_catalog(display_name))")
+    .select("id, started_at, feedback_mode, size, score, status, pass_score_snapshot, topics, exams(exam_catalog(display_name))")
     .eq("user_id", id)
     .order("started_at", { ascending: false })
     .limit(200);
@@ -31,7 +31,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     name: (s.exams as unknown as { exam_catalog: { display_name: string } }).exam_catalog.display_name,
     href: s.status === "in_progress" ? `/simulasi/${s.id}` : `/riwayat/${s.id}`,
   }));
-  const finished = sims.filter((s) => s.status === "finished" && s.score != null);
+  // Focus runs are drills on part of the exam, so they stay out of the average and best score.
+  const finished = sims.filter((s) => s.status === "finished" && s.score != null && !s.topics);
   const best = finished.length ? Math.max(...finished.map((s) => Number(s.score))) : null;
   const avg = finished.length ? Math.round(finished.reduce((a, s) => a + Number(s.score), 0) / finished.length) : null;
 
@@ -71,6 +72,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                       <span className="flex flex-wrap gap-2">
                         <Badge tone={STATUS[s.status].tone}>{STATUS[s.status].label}</Badge>
                         <Badge>{s.size} questions</Badge>
+                        {s.topics && <Badge tone="accent">Focus</Badge>}
                       </span>
                     </div>
                     <span className="text-2xl font-bold tabular-nums">{s.score ?? "–"}</span>
@@ -101,7 +103,9 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                           {fmt.format(new Date(s.started_at))}
                         </Link>
                       </td>
-                      <td className="px-4 py-3">{s.name}</td>
+                      <td className="px-4 py-3">
+                        {s.name} {s.topics && <Badge tone="accent">Focus</Badge>}
+                      </td>
                       <td className="px-4 py-3">{s.feedback_mode === "instant" ? "Instant" : "At the end"}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{s.size}</td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">{s.score ?? "–"}</td>

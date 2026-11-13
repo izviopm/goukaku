@@ -12,6 +12,7 @@ type Snapshot = {
   body: string;
   options: string[];
   answer?: string | null;
+  key?: string | null; // the bank letter before options were shuffled
   rubric?: string[] | null;
   explanation: string | null;
   topic: string | null;
@@ -50,6 +51,7 @@ export default async function HistoryDetail({ params }: { params: Promise<{ id: 
             <div className="flex flex-col gap-1">
               <p className="text-sm font-medium opacity-90">
                 {sim.feedback_mode === "instant" ? "Instant feedback" : "Feedback at the end"} · {status}
+                {sim.topics && ` · focus on ${(sim.topics as string[]).join(", ")}`}
               </p>
               <h1 className="text-2xl font-bold sm:text-3xl">{name}</h1>
               <p className="opacity-90">
@@ -94,7 +96,7 @@ export default async function HistoryDetail({ params }: { params: Promise<{ id: 
           const s = it.snapshot as Snapshot;
           const type = s.type ?? "mcq";
           const current = it.questions as unknown as { answer: string | null } | null;
-          const keyChanged = current && current.answer !== s.answer;
+          const keyChanged = current && current.answer !== (s.key ?? s.answer);
           return (
             <StaggerItem as="li" key={it.id}>
               <Card className="flex flex-col gap-3">

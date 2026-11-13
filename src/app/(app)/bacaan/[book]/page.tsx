@@ -19,7 +19,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   return (
     <>
       <Hero
-        eyebrow={`Module ${book.id}`}
+        eyebrow={`${book.examSlug.replace("-", " ").toUpperCase()}`}
         title={book.title}
         actions={
           <LinkButton href={`/ujian/${book.examSlug}`} variant="accent">

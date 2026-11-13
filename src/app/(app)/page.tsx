@@ -11,8 +11,9 @@ export default async function Dashboard() {
   const { supabase, id, email, name } = await getUser();
   const [{ data: exams }, { data: pool }, { data: sims }, { data: catalog }] = await Promise.all([
     supabase.from("user_exams").select("exam_id, exams(exam_catalog(slug, display_name))").eq("user_id", id).order("created_at", { ascending: false }),
-    supabase.from("user_exam_pool").select("exam_id, questions(answer_status, status)").eq("user_id", id),
-    supabase.from("simulations").select("exam_id, score, pass_score_snapshot, started_at").eq("user_id", id).eq("status", "finished").order("started_at", { ascending: false }),
+    // Counted in the database: the shared bank is far larger than one page of rows.
+    supabase.rpc("my_exam_ready"),
+    supabase.from("simulations").select("exam_id, score, pass_score_snapshot, started_at, topics").eq("user_id", id).eq("status", "finished").order("started_at", { ascending: false }),
     // Set-up exams (identity known) others can join instead of retyping a near-duplicate name.
     supabase.from("exam_catalog").select("slug, display_name, identity").not("identity", "is", null).order("display_name"),
   ]);
@@ -45,13 +46,10 @@ export default async function Dashboard() {
     );
   }
 
-  const readyBy = new Map<string, number>();
-  for (const p of pool ?? []) {
-    const q = p.questions as unknown as { answer_status: string; status: string } | null;
-    if (q?.answer_status === "verified" && q.status === "active") readyBy.set(p.exam_id, (readyBy.get(p.exam_id) ?? 0) + 1);
-  }
+  const readyBy = new Map<string, number>(((pool ?? []) as { exam_id: string; ready: number }[]).map((r) => [r.exam_id, r.ready]));
   const lastBy = new Map<string, { score: number; pass: number | null }>();
-  for (const s of sims ?? []) if (!lastBy.has(s.exam_id)) lastBy.set(s.exam_id, { score: Number(s.score), pass: s.pass_score_snapshot });
+  // Focus runs (topics set) cover part of the exam, so they never count as its last score or a pass.
+  for (const s of sims ?? []) if (!s.topics && !lastBy.has(s.exam_id)) lastBy.set(s.exam_id, { score: Number(s.score), pass: s.pass_score_snapshot });
   const totalReady = [...readyBy.values()].reduce((a, b) => a + b, 0);
 
   return (

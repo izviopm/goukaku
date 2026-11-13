@@ -153,10 +153,13 @@ for (const m of MODULES) {
   // Blueprint = topic share of the imported bank, so every run's quota fits what exists.
   const count = new Map();
   for (const r of all) count.set(r.topic, (count.get(r.topic) ?? 0) + 1);
+  const shares = [...count].map(([topic, n]) => ({ topic, percentage: Math.max(0.01, Math.round((10000 * n) / all.length) / 100) })).sort((x, y) => y.percentage - x.percentage);
+  // Rounding drift goes to the largest topic, so the total is exactly 100 and the editor accepts it.
+  shares[0].percentage = Math.round((shares[0].percentage + 100 - shares.reduce((t, r) => t + r.percentage, 0)) * 100) / 100;
   check(await db.from("exam_blueprints").delete().eq("exam_id", examId), "clear blueprint");
   check(
     await db.from("exam_blueprints").insert(
-      [...count].map(([topic, n]) => ({ exam_id: examId, topic, percentage: Math.max(0.01, Math.round((10000 * n) / all.length) / 100), source: "web", confirmed_by: adminId })),
+      shares.map((r) => ({ exam_id: examId, ...r, source: "web", confirmed_by: adminId })),
     ),
     "blueprint",
   );
