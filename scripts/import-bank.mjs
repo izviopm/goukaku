@@ -84,7 +84,7 @@ for (const m of MODULES) {
         {
           slug,
           display_name: name,
-          aliases: [...new Set([slug, slugify(`${m.cert} ${m.code} ${m.title}`), slugify(`${m.cert} ${m.title}`)])],
+          aliases: [...new Set([slug, `aamai-${slug}`, `${slug}-aamai`, slugify(`${m.cert} ${m.code} ${m.title}`), slugify(`${m.cert} ${m.title}`)])],
           language: "id",
           format: m.format,
           identity: { full_name: `${m.level} – Modul ${m.code} ${m.title}`, issuer: ISSUER, scope: `Modul ${m.code} – ${m.title}`, country: "Indonesia", summary: m.summary },
