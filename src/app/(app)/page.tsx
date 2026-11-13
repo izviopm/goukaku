@@ -3,18 +3,24 @@ import { BookOpenCheck, ChevronRight, ClipboardList, Library, Plus, ShieldCheck,
 import { Reveal, Stagger, StaggerItem } from "@/components/motion";
 import { Badge, Card, Hero, IconTile, ProgressBar, SectionTitle, StatTile } from "@/components/ui";
 import { getUser } from "@/lib/auth";
-import { CreateExamForm } from "./create-exam-form";
+import { CreateExamForm, type AvailableExam } from "./create-exam-form";
 
 type ExamRow = { exam_id: string; exams: { exam_catalog: { slug: string; display_name: string } } };
 
 export default async function Dashboard() {
   const { supabase, id, email, name } = await getUser();
-  const [{ data: exams }, { data: pool }, { data: sims }] = await Promise.all([
+  const [{ data: exams }, { data: pool }, { data: sims }, { data: catalog }] = await Promise.all([
     supabase.from("user_exams").select("exam_id, exams(exam_catalog(slug, display_name))").eq("user_id", id).order("created_at", { ascending: false }),
     supabase.from("user_exam_pool").select("exam_id, questions(answer_status, status)").eq("user_id", id),
     supabase.from("simulations").select("exam_id, score, pass_score_snapshot, started_at").eq("user_id", id).eq("status", "finished").order("started_at", { ascending: false }),
+    // Set-up exams (identity known) others can join instead of retyping a near-duplicate name.
+    supabase.from("exam_catalog").select("slug, display_name, identity").not("identity", "is", null).order("display_name"),
   ]);
   const list = ((exams ?? []) as unknown as ExamRow[]).map((e) => ({ id: e.exam_id, ...e.exams.exam_catalog }));
+  const mine = new Set(list.map((e) => e.slug));
+  const available: AvailableExam[] = (catalog ?? [])
+    .filter((c) => !mine.has(c.slug))
+    .map((c) => ({ slug: c.slug, display_name: c.display_name, scope: (c.identity as { scope?: string } | null)?.scope ?? null }));
 
   // First visit: nothing to show yet, so the page is only the "create exam" step.
   if (list.length === 0) {
@@ -32,7 +38,7 @@ export default async function Dashboard() {
             </div>
           </div>
           <div className="p-6">
-            <CreateExamForm />
+            <CreateExamForm available={available} />
           </div>
         </Card>
       </Reveal>
@@ -109,7 +115,7 @@ export default async function Dashboard() {
         <Reveal className="flex flex-col gap-4" delay={0.1}>
           <SectionTitle icon={Plus}>New exam</SectionTitle>
           <Card>
-            <CreateExamForm />
+            <CreateExamForm available={available} />
           </Card>
           <Card className="flex gap-4 bg-ai-soft/60">
             <IconTile icon={ShieldCheck} tone="ai" />

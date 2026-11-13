@@ -14,6 +14,15 @@ export async function signOut() {
 
 export type CreateExamState = { error?: string };
 
+/** Adds an exam that already exists in the catalog to the user's dashboard. */
+export async function joinExam(form: FormData) {
+  const user = await getUser();
+  const catalog = await findCatalog(String(form.get("slug") ?? ""));
+  if (!catalog) return;
+  const { slug } = await findOrCreateExam(catalog.display_name, user.id);
+  redirect(`/ujian/${slug}`);
+}
+
 export async function createExam(_prev: CreateExamState, form: FormData): Promise<CreateExamState> {
   const user = await getUser();
   const certification = String(form.get("certification") ?? "").trim();
