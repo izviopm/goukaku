@@ -3,6 +3,7 @@ import { BookOpenCheck, ChevronRight, ClipboardList, Library, Plus, ShieldCheck,
 import { Reveal, Stagger, StaggerItem } from "@/components/motion";
 import { Badge, Card, Hero, IconTile, ProgressBar, SectionTitle, StatTile } from "@/components/ui";
 import { getUser } from "@/lib/auth";
+import { LEVELS } from "@/lib/bacaan";
 import { CreateExamForm, type AvailableExam } from "./create-exam-form";
 
 type ExamRow = { exam_id: string; exams: { exam_catalog: { slug: string; display_name: string } } };
@@ -52,6 +53,19 @@ export default async function Dashboard() {
   for (const s of sims ?? []) if (!s.topics && !lastBy.has(s.exam_id)) lastBy.set(s.exam_id, { score: Number(s.score), pass: s.pass_score_snapshot });
   const totalReady = [...readyBy.values()].reduce((a, b) => a + b, 0);
 
+  // Exams of one certification level sit together in subject order; anything else goes under "Other exams".
+  const leveled = LEVELS.map((l) => ({
+    title: l.level,
+    name: l.name,
+    exams: l.subjects.flatMap((sub) => {
+      const e = list.find((x) => x.slug === `${l.level.toLowerCase()}-${sub.code}`);
+      return e ? [{ ...e, subject: sub.title as string | null }] : [];
+    }),
+  })).filter((g) => g.exams.length);
+  const grouped = new Set(leveled.flatMap((g) => g.exams.map((e) => e.slug)));
+  const other = list.filter((e) => !grouped.has(e.slug)).map((e) => ({ ...e, subject: null as string | null }));
+  const groups = [...leveled, ...(other.length ? [{ title: "Other exams", name: "", exams: other }] : [])];
+
   return (
     <>
       <Hero eyebrow="Welcome back" title={`Hi, ${name?.split(" ")[0] ?? email.split("@")[0]}`}>
@@ -75,8 +89,15 @@ export default async function Dashboard() {
           <SectionTitle icon={ClipboardList}>
             <span id="exams-title">Your exams</span>
           </SectionTitle>
+          {groups.map((g) => (
+            <div key={g.title} className="mb-6 flex flex-col gap-3 last:mb-0">
+              {groups.length > 1 && (
+                <h3 className="text-sm font-semibold">
+                  {g.title} {g.name && <span className="font-normal text-muted-foreground">· {g.name}</span>}
+                </h3>
+              )}
           <Stagger as="ul" className="grid gap-4 sm:grid-cols-2">
-            {list.map((c) => {
+            {g.exams.map((c) => {
               const ready = readyBy.get(c.id) ?? 0;
               const last = lastBy.get(c.id);
               const passed = last && last.pass != null ? last.score >= last.pass : null;
@@ -89,7 +110,10 @@ export default async function Dashboard() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <IconTile icon={BookOpenCheck} />
-                        <span className="truncate text-lg font-semibold">{c.display_name}</span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-lg font-semibold">{c.display_name}</span>
+                          {c.subject && <span className="block truncate text-sm text-muted-foreground">{c.subject}</span>}
+                        </span>
                       </div>
                       <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-muted-foreground transition duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
                     </div>
@@ -109,6 +133,8 @@ export default async function Dashboard() {
               );
             })}
           </Stagger>
+            </div>
+          ))}
         </section>
         <Reveal className="flex flex-col gap-4" delay={0.1}>
           <SectionTitle icon={Plus}>New exam</SectionTitle>
