@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import {
+  BookOpen,
   ChartColumn,
   CircleCheck,
   FileText,
@@ -21,6 +22,7 @@ import {
 import { Reveal, Stagger, StaggerItem } from "@/components/motion";
 import { Badge, Card, Hero, LinkButton, ProgressBar, SectionTitle, StatTile } from "@/components/ui";
 import { getUser } from "@/lib/auth";
+import { bookForExam } from "@/lib/bacaan";
 import { getExamBySlug } from "@/lib/exams";
 import { normalize } from "@/lib/rules";
 import type { Readiness } from "./actions";
@@ -81,6 +83,7 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
 
   const topicSuggestions = [...new Set([...(defaults ?? []).map((d) => d.topic), ...(topicRows ?? []).map((t) => t.topic as string)])].sort();
   const passScore = goal?.target_score ?? exam.pass_score;
+  const book = bookForExam(slug);
 
   const identityBlock = identity ? (
     <div className="flex flex-col gap-2">
@@ -221,6 +224,11 @@ export default async function ExamPage({ params }: { params: Promise<{ slug: str
             <LinkButton href={`/riwayat?ujian=${slug}`} variant="outline">
               <History aria-hidden="true" className="size-4" /> History
             </LinkButton>
+            {book && (
+              <LinkButton href={`/bacaan/${book.id}`} variant="outline">
+                <BookOpen aria-hidden="true" className="size-4" /> Read module
+              </LinkButton>
+            )}
           </>
         }
       >

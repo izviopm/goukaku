@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
-import { History, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { BookOpen, History, LayoutDashboard, ShieldCheck } from "lucide-react";
 import { spring } from "@/components/motion";
 
 const base =
@@ -13,6 +13,7 @@ export function NavLinks({ isAdmin }: { isAdmin: boolean }) {
   const path = usePathname();
   const links = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard, active: path === "/" || path.startsWith("/ujian") || path.startsWith("/simulasi") },
+    { href: "/bacaan", label: "Reading", icon: BookOpen, active: path.startsWith("/bacaan") },
     { href: "/riwayat", label: "History", icon: History, active: path.startsWith("/riwayat") },
     ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: ShieldCheck, active: path.startsWith("/admin") }] : []),
   ];

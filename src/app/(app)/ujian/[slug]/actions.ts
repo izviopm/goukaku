@@ -11,6 +11,7 @@ const SIM_ERRORS: Record<string, string> = {
   NO_BLUEPRINT: "Set a blueprint for this exam first.",
   BAD_SIZE: "Choose between 1 and 200 questions.",
   BAD_MODE: "Choose a feedback mode.",
+  NO_TOPICS: "None of the chosen topics are in your blueprint.",
 };
 
 /** SHORTFALL:[{topic, needed, available}] from start_simulation -> readable per-topic message. */
@@ -26,10 +27,10 @@ function shortfallMessage(raw: string) {
 export type Readiness = { topic: string; needed: number; available: number; unanswered: number };
 
 /** Per-topic needed/available for a run of `size`, for the Start card. */
-export async function getReadiness(examId: string, size: number): Promise<Readiness[]> {
+export async function getReadiness(examId: string, size: number, topics: string[] = []): Promise<Readiness[]> {
   const { supabase } = await getUser();
   if (!Number.isInteger(size) || size < 1 || size > 200) return [];
-  const { data } = await supabase.rpc("exam_readiness", { p_exam_id: examId, p_size: size });
+  const { data } = await supabase.rpc("exam_readiness", { p_exam_id: examId, p_size: size, p_topics: topics.length ? topics : null });
   return (data ?? []) as Readiness[];
 }
 
@@ -40,7 +41,9 @@ export async function startSimulation(_prev: FormState, form: FormData): Promise
   if (!Number.isInteger(size) || size < 1 || size > 200) return { error: SIM_ERRORS.BAD_SIZE, field: "size" };
   if (mode !== "instant" && mode !== "end") return { error: SIM_ERRORS.BAD_MODE, field: "mode" };
 
-  const { data, error } = await supabase.rpc("start_simulation", { p_exam_id: String(form.get("examId")), p_size: size, p_mode: mode });
+  // Focus practice: chosen blueprint topics only; none = the whole blueprint.
+  const topics = form.getAll("topics").map(String).filter(Boolean);
+  const { data, error } = await supabase.rpc("start_simulation", { p_exam_id: String(form.get("examId")), p_size: size, p_mode: mode, p_topics: topics.length ? topics : null });
   if (error) {
     if (error.message.includes("SHORTFALL")) return { error: shortfallMessage(error.message), field: "size" };
     const code = Object.keys(SIM_ERRORS).find((k) => error.message.includes(k));
